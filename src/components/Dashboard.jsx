@@ -31,6 +31,35 @@ export default function Dashboard({ user, onLogout }) {
     }
   };
 
+  // ================= 1. REFRESH WARNING (BeforeUnload) =================
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (testStatus === 'taking') {
+        e.preventDefault();
+        e.returnValue = "Test is running. Are you sure you want to exit?";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [testStatus]);
+
+  // ================= 2. AUTO-SAVE SESSION (Local Storage) =================
+  useEffect(() => {
+    if (testStatus === 'taking' && activeTest) {
+      const sessionData = {
+        testId: activeTest.id,
+        timeLeft,
+        answers,
+        questionStatus,
+        currentQIndex,
+        warnings,
+        language
+      };
+      localStorage.setItem(`aeo_test_${user.phone || user.uid}`, JSON.stringify(sessionData));
+    }
+  }, [timeLeft, answers, questionStatus, currentQIndex, warnings, language, testStatus, activeTest]);
+
+
   // ================= TIMER LOGIC =================
   useEffect(() => {
     let timer;
@@ -81,6 +110,27 @@ export default function Dashboard({ user, onLogout }) {
     if (timeStatus.status === 'upcoming') return alert("This test has not started yet.");
     if (timeStatus.status === 'expired') return alert("This test has expired.");
     
+    // Check if there is an Auto-Saved session
+    const savedSessionStr = localStorage.getItem(`aeo_test_${user.phone || user.uid}`);
+    if (savedSessionStr) {
+      const savedSession = JSON.parse(savedSessionStr);
+      if (savedSession.testId === test.id) {
+         setActiveTest(test);
+         setTimeLeft(savedSession.timeLeft);
+         setAnswers(savedSession.answers || {});
+         setQuestionStatus(savedSession.questionStatus || {});
+         setCurrentQIndex(savedSession.currentQIndex || 0);
+         setWarnings(savedSession.warnings || 0);
+         setLanguage(savedSession.language || 'english');
+         setTestStatus('taking');
+         if(document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch((e) => console.log(e));
+         }
+         return; 
+      }
+    }
+
+    // Launch Fresh Test
     setActiveTest(test);
     setTimeLeft(test.durationMinutes * 60);
     setAnswers({});
@@ -98,22 +148,17 @@ export default function Dashboard({ user, onLogout }) {
   // Smart Parser for English/Hindi Separation
   const parseText = (text) => {
     if (!text) return "";
-    
-    // Format 1: Eng: ... Hin: ...
     if (text.includes("Eng:") && text.includes("Hin:")) {
       const parts = text.split("Hin:");
       const engPart = parts[0].replace("Eng:", "").trim();
       const hinPart = parts[1].trim();
       return language === 'english' ? engPart : hinPart;
     }
-    
-    // Format 2: English / Hindi (Options format)
     if (text.includes(" / ")) {
       const parts = text.split(" / ");
       return language === 'english' ? parts[0].trim() : (parts[1] ? parts[1].trim() : parts[0].trim());
     }
-    
-    return text; // Default fallback
+    return text;
   };
 
   const handleOptionSelect = (opt) => {
@@ -134,6 +179,9 @@ export default function Dashboard({ user, onLogout }) {
 
     setTestStatus('processing');
     if(document.fullscreenElement) document.exitFullscreen().catch(e=>console.log(e));
+
+    // Clear local storage auto-save data
+    localStorage.removeItem(`aeo_test_${user.phone || user.uid}`);
 
     let marksObtained = 0;
     let correctCount = 0;
@@ -184,7 +232,6 @@ export default function Dashboard({ user, onLogout }) {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // ================= NEW: SMART REVIEW HANDLER =================
   const handleReviewClick = () => {
     const now = new Date().getTime();
     const end = new Date(activeTest.endTime).getTime();
@@ -397,7 +444,6 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
           <div className="flex flex-col md:flex-row gap-4 justify-center">
-            {/* Click karne par expiry time check hoga */}
             <button onClick={handleReviewClick} className="bg-yellow-600 hover:bg-yellow-700 font-bold py-4 px-8 text-xl rounded-xl shadow-lg transition-transform active:scale-95 w-full md:w-auto">
               Review Answers
             </button>
