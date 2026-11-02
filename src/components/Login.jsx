@@ -49,13 +49,12 @@ export default function Login({ onLogin, onAdminLogin }) {
         <h2 className="text-2xl md:text-3xl font-bold text-yellow-400 text-center mb-10">Academic Excellence Olympiad</h2>
         
         {!otpSent ? (
-          <form onSubmit={handleSendOtp} className="flex flex-col gap-6">
-            <input type="text" placeholder="Full Student Name" required onChange={(e) => setFormData({...formData, name: e.target.value})} className="p-5 text-xl bg-black text-yellow-300 border-2 border-green-500 rounded-2xl outline-none w-full shadow-inner focus:border-blue-400 transition-colors"/>
+          <form onSubmit={handleSendOtp} className="flex flex-col gap-6" autoComplete="off">
+            <input type="text" placeholder="Full Student Name" required autoComplete="off" onChange={(e) => setFormData({...formData, name: e.target.value})} className="p-5 text-xl bg-black text-yellow-300 border-2 border-green-500 rounded-2xl outline-none w-full shadow-inner"/>
             
-            <input type="text" placeholder="School Name" required onChange={(e) => setFormData({...formData, school: e.target.value})} className="p-5 text-xl bg-black text-yellow-300 border-2 border-green-500 rounded-2xl outline-none w-full shadow-inner focus:border-blue-400 transition-colors"/>
+            <input type="text" placeholder="School Name" required autoComplete="off" onChange={(e) => setFormData({...formData, school: e.target.value})} className="p-5 text-xl bg-black text-yellow-300 border-2 border-green-500 rounded-2xl outline-none w-full shadow-inner"/>
             
-            {/* BIG Dropdown for Class */}
-            <select required value={formData.className} onChange={(e) => setFormData({...formData, className: e.target.value})} className="p-5 text-xl bg-black text-yellow-300 border-2 border-green-500 rounded-2xl outline-none w-full shadow-inner focus:border-blue-400 transition-colors cursor-pointer appearance-none">
+            <select required value={formData.className} onChange={(e) => setFormData({...formData, className: e.target.value})} className="p-5 text-xl bg-black text-yellow-300 border-2 border-green-500 rounded-2xl outline-none w-full shadow-inner cursor-pointer appearance-none">
               <option value="" disabled>Select Category / Class</option>
               <option value="Class 7">Class 7</option>
               <option value="Class 8">Class 8</option>
@@ -69,15 +68,16 @@ export default function Login({ onLogin, onAdminLogin }) {
               <option value="Government Job">Government Job</option>
             </select>
 
-            <input type="tel" placeholder="WhatsApp Number" required onChange={(e) => setFormData({...formData, phone: e.target.value})} className="p-5 text-xl bg-black text-yellow-300 border-2 border-green-500 rounded-2xl outline-none w-full shadow-inner focus:border-blue-400 transition-colors"/>
+            <input type="tel" placeholder="WhatsApp Number" required autoComplete="off" onChange={(e) => setFormData({...formData, phone: e.target.value})} className="p-5 text-xl bg-black text-yellow-300 border-2 border-green-500 rounded-2xl outline-none w-full shadow-inner"/>
             
-            <button type="submit" className="mt-4 p-5 text-2xl bg-blue-600 text-white font-extrabold rounded-2xl hover:bg-blue-700 shadow-xl transition-transform transform active:scale-95">Proceed to Verify</button>
+            <button type="submit" className="mt-4 p-5 text-2xl bg-blue-600 text-white font-extrabold rounded-2xl hover:bg-blue-700 shadow-xl">Proceed to Verify</button>
           </form>
         ) : (
-          <form onSubmit={handleVerifyOtp} className="flex flex-col gap-8">
+          <form onSubmit={handleVerifyOtp} className="flex flex-col gap-8" autoComplete="off">
             <p className="text-green-400 text-center text-xl font-semibold">Verification code sent to {formData.phone}</p>
-            <input type="text" placeholder="Enter OTP (123456)" required onChange={(e) => setOtp(e.target.value)} className="p-6 text-center tracking-[0.5em] font-extrabold bg-black text-yellow-300 border-2 border-green-500 rounded-2xl outline-none text-4xl w-full shadow-inner"/>
-            <button type="submit" className="p-5 text-2xl bg-green-600 text-white font-extrabold rounded-2xl hover:bg-green-700 shadow-xl transition-transform transform active:scale-95">Verify & Enter</button>
+            {/* Added autoComplete off and explicit name to prevent browser autofill */}
+            <input type="text" placeholder="Enter OTP (123456)" required autoComplete="one-time-code" name="otp_code_box" value={otp} onChange={(e) => setOtp(e.target.value)} className="p-6 text-center tracking-[0.5em] font-extrabold bg-black text-yellow-300 border-2 border-green-500 rounded-2xl outline-none text-4xl w-full shadow-inner"/>
+            <button type="submit" className="p-5 text-2xl bg-green-600 text-white font-extrabold rounded-2xl hover:bg-green-700 shadow-xl">Verify & Enter</button>
           </form>
         )}
       </div>
