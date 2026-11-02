@@ -39,22 +39,27 @@ export default function AdminPanel({ onLogout }) {
     setStudents(studentsData);
   };
 
-  // ================= SUPER AUTO-CORRECT LOGIC =================
+  // ================= ULTRA SUPER AUTO-CORRECT LOGIC =================
   const sanitizeAndFormatJSON = (jsonString) => {
     try {
-      // 1. Sirf [ se ] tak ka asli hissa nikalo (Bahar ka kachra hatao)
-      const firstBracket = jsonString.indexOf('[');
-      const lastBracket = jsonString.lastIndexOf(']');
+      // 1. Extra HTML entities aur stray backslashes ko hatao
+      let cleanStr = jsonString.replace(/&#x20;/g, ' '); // HTML spaces theek karein
+      cleanStr = cleanStr.replace(/\\\s*\n/g, '\n'); // Line ke end wale \ ko hatao
+      cleanStr = cleanStr.replace(/\\(?=[,\]}])/g, ''); // Comma ya bracket ke pehle wale \ ko hatao
+      
+      // 2. Sirf [ se ] tak ka asli hissa nikalo
+      const firstBracket = cleanStr.indexOf('[');
+      const lastBracket = cleanStr.lastIndexOf(']');
       if (firstBracket === -1 || lastBracket === -1) throw new Error("Array brackets [] missing");
       
-      let cleanStr = jsonString.substring(firstBracket, lastBracket + 1);
+      cleanStr = cleanStr.substring(firstBracket, lastBracket + 1);
       
-      // 2. Trailing commas ko theek karo
+      // 3. Trailing commas ko theek karo
       cleanStr = cleanStr.replace(/,\s*([\]}])/g, '$1');
       
       let parsedArray = JSON.parse(cleanStr);
 
-      // 3. Agar AI ne option_a, option_b format diya hai, toh usko khud theek karke array me badal do
+      // 4. Agar AI ne option_a, option_b format diya hai, toh usko khud theek karo
       return parsedArray.map(q => {
         if (q.option_a || q.option_1 || q.options_a) {
           return {
@@ -67,7 +72,7 @@ export default function AdminPanel({ onLogout }) {
         return q;
       });
     } catch (error) {
-      throw new Error("Super Auto-Correct Failed: " + error.message);
+      throw new Error("Auto-Correct Failed: " + error.message);
     }
   };
 
@@ -143,7 +148,6 @@ export default function AdminPanel({ onLogout }) {
     }
   };
 
-  // PDF Download Logic
   const handleDownloadPDF = async () => {
     if (!resultTest) return alert("Please select a test first.");
     const q = query(collection(db, "results"), where("testId", "==", resultTest));
@@ -220,7 +224,6 @@ export default function AdminPanel({ onLogout }) {
         <button onClick={onLogout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg w-full md:w-auto">Logout</button>
       </div>
 
-      {/* 3 VIP TABS FOR ADMIN */}
       <div className="flex flex-wrap gap-4 mb-8">
         <button onClick={() => setActiveTab('generate')} className={`px-6 py-4 text-lg font-bold rounded-xl transition-colors w-full md:w-auto ${activeTab === 'generate' ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(0,0,255,0.5)]' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>1. Generate New Test</button>
         <button onClick={() => setActiveTab('append')} className={`px-6 py-4 text-lg font-bold rounded-xl transition-colors w-full md:w-auto ${activeTab === 'append' ? 'bg-green-600 text-white shadow-[0_0_15px_rgba(34,197,94,0.5)]' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>2. Add Questions (Append)</button>
@@ -267,7 +270,7 @@ export default function AdminPanel({ onLogout }) {
               </div>
             </div>
             <div className="w-full mb-8">
-              <label className="text-green-400 text-sm font-bold mb-2 block">Super Auto-Correct Enabled JSON Input</label>
+              <label className="text-green-400 text-sm font-bold mb-2 block">Ultra Auto-Correct Enabled JSON Input</label>
               <textarea rows="8" placeholder='Paste AI JSON Here... (No matter what format AI gives, we will fix it!)' value={newTest.jsonInput} onChange={(e) => setNewTest({...newTest, jsonInput: e.target.value})} className="p-5 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-blue-500"></textarea>
             </div>
             <div className="flex flex-col md:flex-row justify-between items-center gap-6">
@@ -319,7 +322,6 @@ export default function AdminPanel({ onLogout }) {
         {/* ================= TAB 3: MANAGE & DOWNLOAD ================= */}
         {activeTab === 'manage' && (
           <div className="grid grid-cols-1 gap-10">
-            {/* PDF Download Section */}
             <div className="bg-gray-800 border-l-4 border-yellow-500 p-8 rounded-2xl shadow-lg">
               <h3 className="text-3xl font-extrabold text-yellow-400 mb-6">🏆 Result PDF Generator</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
@@ -341,7 +343,6 @@ export default function AdminPanel({ onLogout }) {
               </div>
             </div>
 
-            {/* CSV Download Section */}
             <div className="bg-gray-800 border-l-4 border-blue-500 p-8 rounded-2xl shadow-lg">
               <h3 className="text-3xl font-extrabold text-blue-400 mb-6">📊 Export Student Database</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
@@ -356,7 +357,6 @@ export default function AdminPanel({ onLogout }) {
               </div>
             </div>
 
-            {/* Delete Test Section */}
             <div className="bg-gray-800 border-l-4 border-red-500 p-8 rounded-2xl shadow-lg">
               <h3 className="text-3xl font-extrabold text-red-500 mb-6">🗑️ Permanently Delete Test</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
