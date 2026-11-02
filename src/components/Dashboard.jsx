@@ -31,7 +31,7 @@ export default function Dashboard({ user, onLogout }) {
     }
   };
 
-  // Timer & Anti-Cheat Logic
+  // ================= TIMER LOGIC =================
   useEffect(() => {
     let timer;
     if (testStatus === 'taking' && timeLeft > 0) {
@@ -42,16 +42,30 @@ export default function Dashboard({ user, onLogout }) {
     return () => clearInterval(timer);
   }, [testStatus, timeLeft]);
 
+  // ================= STRICT ANTI-CHEAT LOGIC (3 Warnings) =================
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && testStatus === 'taking') {
-        setWarnings(w => w + 1);
-        alert("WARNING: Window switching is not allowed! Your activity has been recorded.");
+        setWarnings(prev => {
+          const newCount = prev + 1;
+          if (newCount < 3) {
+            alert(`WARNING ${newCount}/3: Window switching or minimizing is not allowed! Your test will auto-submit on the 3rd warning.`);
+          }
+          return newCount;
+        });
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [testStatus]);
+
+  // Trigger Submit on 3rd Warning
+  useEffect(() => {
+    if (warnings >= 3 && testStatus === 'taking') {
+      alert("🚨 MAXIMUM WARNINGS REACHED! You violated the rules 3 times. Test is automatically submitting.");
+      handleSubmitTest();
+    }
+  }, [warnings, testStatus]);
 
   const checkTimeStatus = (startTime, endTime) => {
     const now = new Date().getTime();
@@ -115,7 +129,7 @@ export default function Dashboard({ user, onLogout }) {
   };
 
   const handleSubmitTest = async () => {
-    const isConfirmed = timeLeft === 0 ? true : window.confirm("Are you sure you want to submit the entire test?");
+    const isConfirmed = (timeLeft === 0 || warnings >= 3) ? true : window.confirm("Are you sure you want to submit the entire test?");
     if (!isConfirmed) return;
 
     setTestStatus('processing');
@@ -276,7 +290,7 @@ export default function Dashboard({ user, onLogout }) {
         <div className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full flex flex-col">
           <div className="mb-4 flex justify-between items-end">
             <span className="text-xl md:text-2xl font-bold text-gray-400">Question {currentQIndex + 1} of {activeTest.questions.length}</span>
-            <span className="text-sm text-red-500 font-bold">Warnings: {warnings}</span>
+            <span className="text-sm text-red-500 font-bold">Warnings: {warnings}/3</span>
           </div>
 
           <div className="bg-gray-900 p-6 md:p-10 rounded-3xl border-2 border-gray-700 shadow-xl mb-6 flex-1">
