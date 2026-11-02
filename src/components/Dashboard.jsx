@@ -9,10 +9,12 @@ export default function Dashboard({ user, onLogout }) {
   // Test Taking States
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [answers, setAnswers] = useState({});
+  const [questionStatus, setQuestionStatus] = useState({}); // 'unattempted'(blue), 'answered'(green), 'skipped'(red)
   const [timeLeft, setTimeLeft] = useState(0);
   const [testStatus, setTestStatus] = useState('dashboard'); // dashboard, taking, submitted, review
   const [warnings, setWarnings] = useState(0);
   const [result, setResult] = useState(null);
+  const [language, setLanguage] = useState('english'); // english or hindi
 
   useEffect(() => {
     fetchTests();
@@ -65,26 +67,55 @@ export default function Dashboard({ user, onLogout }) {
     if (timeStatus.status === 'upcoming') return alert("This test has not started yet.");
     if (timeStatus.status === 'expired') return alert("This test has expired.");
     
-    // Launch Test
     setActiveTest(test);
     setTimeLeft(test.durationMinutes * 60);
     setAnswers({});
+    setQuestionStatus({});
     setCurrentQIndex(0);
     setWarnings(0);
+    setLanguage('english');
     setTestStatus('taking');
     
-    // Request Fullscreen for premium feel
     if(document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch((e) => console.log(e));
     }
   };
 
+  // Smart Parser for English/Hindi Separation
+  const parseText = (text) => {
+    if (!text) return "";
+    
+    // Format 1: Eng: ... Hin: ...
+    if (text.includes("Eng:") && text.includes("Hin:")) {
+      const parts = text.split("Hin:");
+      const engPart = parts[0].replace("Eng:", "").trim();
+      const hinPart = parts[1].trim();
+      return language === 'english' ? engPart : hinPart;
+    }
+    
+    // Format 2: English / Hindi (Options format)
+    if (text.includes(" / ")) {
+      const parts = text.split(" / ");
+      return language === 'english' ? parts[0].trim() : (parts[1] ? parts[1].trim() : parts[0].trim());
+    }
+    
+    return text; // Default fallback
+  };
+
   const handleOptionSelect = (opt) => {
     setAnswers({ ...answers, [currentQIndex]: opt });
+    setQuestionStatus({ ...questionStatus, [currentQIndex]: 'answered' });
+  };
+
+  const handleSkip = () => {
+    setQuestionStatus({ ...questionStatus, [currentQIndex]: 'skipped' });
+    if (currentQIndex < activeTest.questions.length - 1) {
+      setCurrentQIndex(currentQIndex + 1);
+    }
   };
 
   const handleSubmitTest = async () => {
-    const isConfirmed = timeLeft === 0 ? true : window.confirm("Are you sure you want to submit the test?");
+    const isConfirmed = timeLeft === 0 ? true : window.confirm("Are you sure you want to submit the entire test?");
     if (!isConfirmed) return;
 
     setTestStatus('processing');
@@ -197,22 +228,61 @@ export default function Dashboard({ user, onLogout }) {
     const question = activeTest.questions[currentQIndex];
     return (
       <div className="min-h-screen bg-black w-full text-white flex flex-col font-sans select-none">
-        <div className="bg-gray-900 p-4 md:p-6 border-b-2 border-blue-600 flex justify-between items-center shadow-lg sticky top-0 z-50">
-          <h2 className="text-2xl md:text-3xl font-bold text-blue-400">{activeTest.subject}</h2>
-          <div className={`text-2xl md:text-4xl font-extrabold px-6 py-2 rounded-xl shadow-inner ${timeLeft < 300 ? 'bg-red-900 text-red-100 animate-pulse' : 'bg-gray-800 text-yellow-400'}`}>
-            ⏱ {formatTime(timeLeft)}
+        
+        {/* Top Header: Info, Language, Timer, Submit */}
+        <div className="bg-gray-900 p-4 border-b-2 border-blue-600 flex flex-wrap justify-between items-center shadow-lg sticky top-0 z-50 gap-4">
+          <h2 className="text-xl md:text-2xl font-bold text-blue-400">{activeTest.subject}</h2>
+          
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setLanguage(lang => lang === 'english' ? 'hindi' : 'english')}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg"
+            >
+              🌐 {language === 'english' ? 'View in Hindi' : 'View in English'}
+            </button>
+            <div className={`text-xl md:text-3xl font-extrabold px-4 py-1 rounded-xl shadow-inner ${timeLeft < 300 ? 'bg-red-900 text-red-100 animate-pulse' : 'bg-gray-800 text-yellow-400'}`}>
+              ⏱ {formatTime(timeLeft)}
+            </div>
+            <button onClick={handleSubmitTest} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg shadow-lg hidden md:block">
+              Submit Test
+            </button>
           </div>
         </div>
 
+        {/* Question Palette (1, 2, 3...) */}
+        <div className="bg-gray-800 p-4 border-b border-gray-700 flex flex-wrap gap-2 justify-center max-h-40 overflow-y-auto">
+          {activeTest.questions.map((_, idx) => {
+            const status = questionStatus[idx] || 'unattempted';
+            let btnColor = 'bg-blue-600 border-blue-700'; // Default unattempted
+            if (status === 'answered') btnColor = 'bg-green-500 border-green-600';
+            if (status === 'skipped') btnColor = 'bg-red-500 border-red-600';
+            
+            const isCurrent = currentQIndex === idx;
+            if (isCurrent) btnColor += ' ring-4 ring-yellow-400 transform scale-110';
+
+            return (
+              <button 
+                key={idx} 
+                onClick={() => setCurrentQIndex(idx)}
+                className={`w-10 h-10 md:w-12 md:h-12 rounded-lg font-bold text-white border-2 shadow-md transition-all ${btnColor}`}
+              >
+                {idx + 1}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Question Area */}
         <div className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full flex flex-col">
-          <div className="mb-6 flex justify-between items-end">
+          <div className="mb-4 flex justify-between items-end">
             <span className="text-xl md:text-2xl font-bold text-gray-400">Question {currentQIndex + 1} of {activeTest.questions.length}</span>
-            <span className="text-md text-red-500 font-bold">Warnings: {warnings}</span>
+            <span className="text-sm text-red-500 font-bold">Warnings: {warnings}</span>
           </div>
 
-          <div className="bg-gray-900 p-6 md:p-10 rounded-3xl border-2 border-gray-700 shadow-xl mb-8 flex-1">
+          <div className="bg-gray-900 p-6 md:p-10 rounded-3xl border-2 border-gray-700 shadow-xl mb-6 flex-1">
+            {/* Parsed Bilingual Question */}
             <h3 className="text-2xl md:text-3xl font-semibold text-yellow-300 mb-8 whitespace-pre-wrap leading-relaxed">
-              {question.question}
+              {parseText(question.question)}
             </h3>
 
             <div className="flex flex-col gap-4">
@@ -225,34 +295,43 @@ export default function Dashboard({ user, onLogout }) {
                       ? 'bg-blue-600 border-blue-400 shadow-[0_0_15px_rgba(37,99,235,0.5)] text-white' 
                       : 'bg-black border-gray-600 text-gray-300 hover:border-gray-400 hover:bg-gray-800'}`}
                 >
-                  {String.fromCharCode(65 + idx)}. {opt}
+                  <span className="font-bold mr-3">{String.fromCharCode(65 + idx)}.</span>
+                  {parseText(opt)}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="flex justify-between items-center bg-gray-900 p-4 rounded-2xl border-2 border-gray-800">
+          {/* Bottom Navigation */}
+          <div className="flex flex-wrap justify-between items-center bg-gray-900 p-4 rounded-2xl border-2 border-gray-800 gap-4">
             <button 
               disabled={currentQIndex === 0} 
               onClick={() => setCurrentQIndex(prev => prev - 1)}
-              className="px-8 py-4 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-xl font-bold text-xl transition-colors"
+              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-xl font-bold text-xl transition-colors"
             >
-              Back
+              Previous
             </button>
             
+            <button 
+              onClick={handleSkip}
+              className="px-6 py-3 bg-red-800 hover:bg-red-700 text-white rounded-xl font-bold text-xl transition-colors"
+            >
+              Skip
+            </button>
+
             {currentQIndex < activeTest.questions.length - 1 ? (
               <button 
                 onClick={() => setCurrentQIndex(prev => prev + 1)}
-                className="px-10 py-4 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-xl shadow-[0_0_15px_rgba(0,0,255,0.3)] transition-colors"
+                className="px-8 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-xl shadow-[0_0_15px_rgba(0,0,255,0.3)] transition-colors"
               >
                 Next
               </button>
             ) : (
               <button 
                 onClick={handleSubmitTest}
-                className="px-10 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xl shadow-[0_0_15px_rgba(0,255,0,0.4)] transition-colors animate-pulse"
+                className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xl shadow-[0_0_15px_rgba(0,255,0,0.4)] transition-colors animate-pulse md:hidden"
               >
-                Submit Test
+                Submit
               </button>
             )}
           </div>
@@ -318,7 +397,7 @@ export default function Dashboard({ user, onLogout }) {
 
             return (
               <div key={idx} className={`bg-gray-900 p-6 md:p-8 rounded-3xl border-l-8 shadow-lg ${isCorrect ? 'border-green-500' : isUnanswered ? 'border-gray-500' : 'border-red-500'}`}>
-                <h3 className="text-xl md:text-2xl font-bold text-gray-200 mb-6 whitespace-pre-wrap">Q{idx + 1}. {q.question}</h3>
+                <h3 className="text-xl md:text-2xl font-bold text-gray-200 mb-6 whitespace-pre-wrap">Q{idx + 1}. {parseText(q.question)}</h3>
                 
                 <div className="flex flex-col gap-3 mb-6">
                   {q.options.map((opt, oIdx) => {
@@ -328,7 +407,7 @@ export default function Dashboard({ user, onLogout }) {
                     
                     return (
                       <div key={oIdx} className={`p-4 rounded-xl border-2 text-lg ${optStyle}`}>
-                        {String.fromCharCode(65 + oIdx)}. {opt}
+                        {String.fromCharCode(65 + oIdx)}. {parseText(opt)}
                       </div>
                     );
                   })}
@@ -337,7 +416,7 @@ export default function Dashboard({ user, onLogout }) {
                 {q.review && (
                   <div className="mt-4 p-5 bg-blue-900/30 border border-blue-800 rounded-xl">
                     <p className="text-blue-300 font-bold mb-2">Explanation (व्याख्या):</p>
-                    <p className="text-gray-300 text-lg whitespace-pre-wrap leading-relaxed">{q.review}</p>
+                    <p className="text-gray-300 text-lg whitespace-pre-wrap leading-relaxed">{parseText(q.review)}</p>
                   </div>
                 )}
               </div>
