@@ -1,63 +1,48 @@
-import React, { useState } from 'react';
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+  {/* Big Admin Dropdown */}
+  <div className="w-full">
+    <label className="text-yellow-400 text-sm font-bold mb-2 block">Class / Category</label>
+    <select 
+      value={newTest.class} 
+      onChange={(e) => setNewTest({...newTest, class: e.target.value})}
+      className="p-4 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer appearance-none"
+    >
+      <option value="" disabled>Select Category</option>
+      <option value="Class 7">Class 7</option>
+      <option value="Class 8">Class 8</option>
+      <option value="Class 9">Class 9</option>
+      <option value="Class 10">Class 10</option>
+      <option value="Class 11">Class 11</option>
+      <option value="Class 12">Class 12</option>
+      <option value="NEET">NEET</option>
+      <option value="JEE">JEE</option>
+      <option value="Graduation">Graduation</option>
+      <option value="Government Job">Government Job</option>
+    </select>
+  </div>
 
-export default function AdminPanel({ onLogout }) {
-  const [tab, setTab] = useState('generate');
-  const [jsonInput, setJsonInput] = useState('');
+  <div className="w-full">
+    <label className="text-yellow-400 text-sm font-bold mb-2 block">Subject Name</label>
+    <input type="text" placeholder="e.g. Physics" value={newTest.subject} onChange={(e) => setNewTest({...newTest, subject: e.target.value})} className="p-4 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
+  </div>
 
-  return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-red-500">AEO Admin Panel</h1>
-        <button onClick={onLogout} className="bg-red-600 px-4 py-2 rounded">Logout</button>
-      </div>
-      
-      <div className="flex gap-4 mb-6">
-        <button onClick={() => setTab('generate')} className={`px-4 py-2 rounded ${tab === 'generate' ? 'bg-blue-600' : 'bg-gray-800'}`}>Generate Test</button>
-        <button onClick={() => setTab('download')} className={`px-4 py-2 rounded ${tab === 'download' ? 'bg-green-600' : 'bg-gray-800'}`}>Download & Manage</button>
-      </div>
+  <div className="w-full">
+    <label className="text-yellow-400 text-sm font-bold mb-2 block">Total Marks</label>
+    <input type="number" placeholder="Marks" value={newTest.marks} onChange={(e) => setNewTest({...newTest, marks: e.target.value})} className="p-4 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
+  </div>
 
-      {tab === 'generate' && (
-        <div className="border border-blue-500 p-6 rounded-lg bg-gray-900">
-          <h2 className="text-yellow-400 text-xl mb-4">Create New Test</h2>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <input type="text" placeholder="Class" className="p-2 bg-black border border-gray-600 rounded text-white"/>
-            <input type="text" placeholder="Subject" className="p-2 bg-black border border-gray-600 rounded text-white"/>
-            <input type="number" placeholder="Marks per Q" className="p-2 bg-black border border-gray-600 rounded text-white"/>
-            <input type="number" placeholder="Negative Mark" className="p-2 bg-black border border-gray-600 rounded text-white"/>
-            <input type="datetime-local" className="p-2 bg-black border border-gray-600 rounded text-white"/>
-            <input type="datetime-local" className="p-2 bg-black border border-gray-600 rounded text-white"/>
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-400 mb-2">JSON Questions Format</label>
-            <textarea value={jsonInput} onChange={(e) => setJsonInput(e.target.value)} rows="5" className="w-full p-2 bg-black border border-gray-600 rounded text-green-400 font-mono text-sm" placeholder='[{"question":"...","options":["..."], "answer":"..."}]'></textarea>
-          </div>
-          <div className="flex justify-between items-center">
-            <button onClick={() => alert("Prompt template copied!")} className="text-sm text-blue-400 underline">Get ChatGPT Prompt</button>
-            <button className="bg-green-600 px-6 py-2 rounded font-bold text-white">Generate Test (Live)</button>
-          </div>
-        </div>
-      )}
+  <div className="w-full">
+    <label className="text-yellow-400 text-sm font-bold mb-2 block">Duration (Mins)</label>
+    <input type="number" placeholder="Duration" value={newTest.duration} onChange={(e) => setNewTest({...newTest, duration: e.target.value})} className="p-4 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
+  </div>
 
-      {tab === 'download' && (
-        <div className="border border-green-500 p-6 rounded-lg bg-gray-900 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <button className="p-6 bg-red-900 border border-red-500 rounded hover:bg-red-800">
-            <h3 className="font-bold text-xl mb-2 text-left">Remove Past Tests</h3>
-            <p className="text-xs text-gray-300 text-left">Delete expired tests from student view.</p>
-          </button>
-          <button className="p-6 bg-blue-900 border border-blue-500 rounded hover:bg-blue-800">
-            <h3 className="font-bold text-xl mb-2 text-left">Download Student Data</h3>
-            <p className="text-xs text-gray-300 text-left">Export Excel sheet of students.</p>
-          </button>
-          <button className="p-6 bg-yellow-900 border border-yellow-500 rounded hover:bg-yellow-800">
-            <h3 className="font-bold text-xl mb-2 text-left">Download Result PDF</h3>
-            <p className="text-xs text-gray-300 text-left">Beautiful PDF with rankings and marks.</p>
-          </button>
-          <button className="p-6 bg-purple-900 border border-purple-500 rounded hover:bg-purple-800">
-            <h3 className="font-bold text-xl mb-2 text-left">Live Result Analysis</h3>
-            <p className="text-xs text-gray-300 text-left">View individual sheets and detailed explanations.</p>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+  <div className="w-full">
+    <label className="text-yellow-400 text-sm font-bold mb-2 block">Test Start Time</label>
+    <input type="datetime-local" value={newTest.startTime} onChange={(e) => setNewTest({...newTest, startTime: e.target.value})} className="p-4 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
+  </div>
+
+  <div className="w-full">
+    <label className="text-yellow-400 text-sm font-bold mb-2 block">Test End Time</label>
+    <input type="datetime-local" value={newTest.endTime} onChange={(e) => setNewTest({...newTest, endTime: e.target.value})} className="p-4 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
+  </div>
+</div>
