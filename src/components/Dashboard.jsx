@@ -184,6 +184,22 @@ export default function Dashboard({ user, onLogout }) {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  // ================= NEW: SMART REVIEW HANDLER =================
+  const handleReviewClick = () => {
+    const now = new Date().getTime();
+    const end = new Date(activeTest.endTime).getTime();
+    
+    if (now < end) {
+      const formattedTime = new Date(activeTest.endTime).toLocaleString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true
+      });
+      alert(`Review and Answer Key will be available after the test expires on ${formattedTime}.`);
+    } else {
+      setTestStatus('review');
+    }
+  };
+
   // ================= VIEW: DASHBOARD =================
   if (testStatus === 'dashboard') {
     return (
@@ -294,7 +310,6 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
           <div className="bg-gray-900 p-6 md:p-10 rounded-3xl border-2 border-gray-700 shadow-xl mb-6 flex-1">
-            {/* Parsed Bilingual Question */}
             <h3 className="text-2xl md:text-3xl font-semibold text-yellow-300 mb-8 whitespace-pre-wrap leading-relaxed">
               {parseText(question.question)}
             </h3>
@@ -382,7 +397,8 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
           <div className="flex flex-col md:flex-row gap-4 justify-center">
-            <button onClick={() => setTestStatus('review')} className="bg-yellow-600 hover:bg-yellow-700 font-bold py-4 px-8 text-xl rounded-xl shadow-lg transition-transform active:scale-95 w-full md:w-auto">
+            {/* Click karne par expiry time check hoga */}
+            <button onClick={handleReviewClick} className="bg-yellow-600 hover:bg-yellow-700 font-bold py-4 px-8 text-xl rounded-xl shadow-lg transition-transform active:scale-95 w-full md:w-auto">
               Review Answers
             </button>
             <button onClick={() => {setTestStatus('dashboard'); setActiveTest(null);}} className="bg-blue-600 hover:bg-blue-700 font-bold py-4 px-8 text-xl rounded-xl shadow-lg transition-transform active:scale-95 w-full md:w-auto">
