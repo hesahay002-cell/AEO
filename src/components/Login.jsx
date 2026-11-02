@@ -14,7 +14,6 @@ export default function Login({ onLogin, onAdminLogin }) {
       alert("Kripya sabhi details bharein!");
       return;
     }
-    // WhatsApp Bypass - Direct state change
     alert("Testing Mode Active: Login ke liye OTP '123456' use karein.");
     setOtpSent(true);
   };
@@ -31,7 +30,7 @@ export default function Login({ onLogin, onAdminLogin }) {
         onLogin(user);
       } catch (error) {
         console.error("Database error:", error);
-        onLogin(user); // Error hone par bhi test login ho jayega
+        onLogin(user); 
       }
     } else {
       alert("Galat OTP! Testing ke liye '123456' dalein.");
@@ -40,7 +39,6 @@ export default function Login({ onLogin, onAdminLogin }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative" style={{backgroundColor: 'black'}}>
-      {/* Admin Login Box */}
       <div className="absolute top-2 right-2 flex flex-col opacity-20 hover:opacity-100 transition-opacity">
         <input 
           type="password" value={adminPin} onChange={(e) => setAdminPin(e.target.value)} 
@@ -58,18 +56,29 @@ export default function Login({ onLogin, onAdminLogin }) {
           <form onSubmit={handleSendOtp} className="flex flex-col gap-4">
             <input type="text" placeholder="Student Name" required onChange={(e) => setFormData({...formData, name: e.target.value})} className="p-3 bg-black text-yellow-300 border border-green-500 rounded-lg outline-none"/>
             <input type="text" placeholder="School Name" required onChange={(e) => setFormData({...formData, school: e.target.value})} className="p-3 bg-black text-yellow-300 border border-green-500 rounded-lg outline-none"/>
-            <select required onChange={(e) => setFormData({...formData, className: e.target.value})} className="p-3 bg-black text-yellow-300 border border-green-500 rounded-lg outline-none">
-              <option value="">Select Class</option>
-              <option value="11">Class 11</option>
-              <option value="12">Class 12</option>
+            
+            {/* New Class Dropdown */}
+            <select required value={formData.className} onChange={(e) => setFormData({...formData, className: e.target.value})} className="p-3 bg-black text-yellow-300 border border-green-500 rounded-lg outline-none">
+              <option value="" disabled>Select Class / Category</option>
+              <option value="Class 7">Class 7</option>
+              <option value="Class 8">Class 8</option>
+              <option value="Class 9">Class 9</option>
+              <option value="Class 10">Class 10</option>
+              <option value="Class 11">Class 11</option>
+              <option value="Class 12">Class 12</option>
+              <option value="NEET">NEET</option>
+              <option value="JEE">JEE</option>
+              <option value="Graduation">Graduation</option>
+              <option value="Government Job">Government Job</option>
             </select>
+
             <input type="tel" placeholder="WhatsApp Mobile Number" required onChange={(e) => setFormData({...formData, phone: e.target.value})} className="p-3 bg-black text-yellow-300 border border-green-500 rounded-lg outline-none"/>
-            <button type="submit" className="mt-4 p-3 bg-blue-600 text-white font-bold rounded-lg">Send OTP</button>
+            <button type="submit" className="mt-4 p-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">Send OTP</button>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
             <input type="text" placeholder="Enter OTP (123456)" required onChange={(e) => setOtp(e.target.value)} className="p-3 text-center tracking-widest bg-black text-yellow-300 border border-green-500 rounded-lg outline-none text-2xl"/>
-            <button type="submit" className="mt-4 p-3 bg-green-600 text-white font-bold rounded-lg">Verify & Login</button>
+            <button type="submit" className="mt-4 p-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700">Verify & Login</button>
           </form>
         )}
       </div>
