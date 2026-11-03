@@ -137,24 +137,12 @@ export default function Dashboard({ user, onLogout }) {
     if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>console.error(e));
   };
 
-  // PARSER (PROSPECTUS MAKER + GUESS PAPER PRO)
   const parseText = (rawText) => {
     if (!rawText) return "";
     let text = String(rawText);
 
-    // 1. Safe Image Extraction (GUESS PAPER PRO Logic)
-    const imageTokens = [];
-    text = text.replace(/!\[image\]\((data:image\/[^)]+)\)/g, (match, base64) => {
-        const token = `@@IMAGE_TOKEN_${imageTokens.length}@@`;
-        imageTokens.push(`<div style="text-align:center; margin:15px 0;"><img src="${base64}" style="max-width:100%; border-radius:8px; border:2px solid #374151;" /></div>`);
-        return token;
-    });
-
     text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     text = text.replace(/__(.*?)__/g, '<u>$1</u>');
-
-    // Make sure \ce commands are wrapped in $ for MathJax
-    text = text.replace(/(?<!\$)\\ce\{([^}]+)\}(?!\$)/g, '$\\ce{$1}$');
 
     const hasEng = /Eng:/i.test(text);
     const hasHin = /Hin:/i.test(text);
@@ -181,18 +169,12 @@ export default function Dashboard({ user, onLogout }) {
       text = language === 'english' ? (parts[0]||'').trim() : (parts[1] ? parts[1].trim() : (parts[0]||'').trim());
     }
 
-    // 2. Math/Chemistry Safe Replacement (PROSPECTUS MAKER Logic)
     text = text.replace(/\\xrightarrow(?!\s*\{)/g, '\\rightarrow');
+    
+    // SAFE MATH REPLACEMENT (No aggressive Regex)
     text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, formula) => '\\(' + (formula||'').trim() + '\\)');
 
-    text = text.replace(/\n/g, '<br/>');
-
-    // 3. Restore Images
-    for (let i = 0; i < imageTokens.length; i++) {
-        text = text.replace(`@@IMAGE_TOKEN_${i}@@`, imageTokens[i]);
-    }
-    
-    return text;
+    return text.replace(/\n/g, '<br/>');
   };
 
   const handleOptionSelect = (opt) => {
