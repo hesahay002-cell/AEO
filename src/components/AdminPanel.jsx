@@ -99,7 +99,6 @@ export default function AdminPanel({ onLogout }) {
     setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   };
 
-  // ================= 100% INDESTRUCTIBLE PARSER =================
   const parseCustomFormat = (rawText) => {
     const lines = String(rawText).split('\n');
     const questions = [];
@@ -113,7 +112,6 @@ export default function AdminPanel({ onLogout }) {
       if (trimmed.endsWith('\\')) trimmed = trimmed.slice(0, -1).trim();
       if (!trimmed) return; 
 
-      // STRICT LOCK: Naya question sirf tab banega jab '# Q' se shuru ho
       const isNewQuestion = /^#\s*Q?\d+[\.\:\-]?\s*/i.test(trimmed);
 
       if (isNewQuestion) {
@@ -137,11 +135,10 @@ export default function AdminPanel({ onLogout }) {
         if (currentQ) { currentQ.ans = trimmed.substring(1).trim(); currentMode = 'ans'; }
       } 
       else {
-        // Agar koi aur text ya image code hai, toh wo usi question mein judega
         if (currentQ) {
           currentQ[currentMode] += '\n' + trimmed;
         } else {
-          preamble += '\n' + trimmed; // Q1 aane se pehle ki image
+          preamble += '\n' + trimmed; 
         }
       }
     });
@@ -170,11 +167,11 @@ CRITICAL RULES FOR AI:
 3. Provide the EXACT correct option text starting with "@ "
 4. Provide the explanation starting with "@@ "
 5. Leave exactly one blank line before the next question starts.
-6. Use standard LaTeX for Mathematical/Chemistry equations (e.g., $$C_2H_5Cl$$ or \\ce{H2O}).
+6. MANDATORY: ALWAYS wrap EVERY math/chemistry equation or formula in dollar signs ($). For example: $\\ce{H2O}$ or $C_2H_5Cl$ or $\\ce{CH3Cl}$. Never use \\ce without wrapping it in $.
 7. Do NOT use markdown code blocks or JSON.
 
 Output Format Example:
-# Q1. Question text here
+# Q1. Question text here $\\ce{H2O}$
 #1 Option A
 #2 Option B
 #3 Option C
