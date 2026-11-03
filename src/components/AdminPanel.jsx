@@ -65,7 +65,7 @@ export default function AdminPanel({ onLogout }) {
     }
   };
 
-  // ================= HASHTAG FORMAT PARSER =================
+  // ================= HASHTAG FORMAT PARSER (WITH Q NUMBER CLEANER) =================
   const parseCustomFormat = (rawText) => {
     const lines = rawText.split('\n');
     const questions = [];
@@ -74,10 +74,15 @@ export default function AdminPanel({ onLogout }) {
 
     lines.forEach(line => {
       const trimmed = line.trim();
-      // Match # but NOT #1, #2, etc.
+      
       if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
         if (currentQ) questions.push(currentQ);
-        currentQ = { q: line.substring(1).trim(), o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
+        
+        // Remove # and any auto-generated Q1., Question 2:, etc. from the prompt text
+        let cleanQ = line.substring(1).trim();
+        cleanQ = cleanQ.replace(/^(Q(uestion)?\s*\d+[\.\:\-]?\s*)/i, '');
+        
+        currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
         currentMode = 'q';
       } else if (trimmed.startsWith('#1')) {
         currentQ.o1 = line.substring(2).trim(); currentMode = '1';
@@ -97,7 +102,7 @@ export default function AdminPanel({ onLogout }) {
     });
     if (currentQ) questions.push(currentQ);
 
-    if(questions.length === 0) throw new Error("No questions found! Ensure you start each question with #");
+    if(questions.length === 0) throw new Error("No questions found! Ensure each question starts with #");
 
     return questions.map(q => ({
       question: q.q.trim(),
@@ -107,7 +112,7 @@ export default function AdminPanel({ onLogout }) {
     }));
   };
 
-  // ================= DYNAMIC PROMPT GENERATOR =================
+  // ================= DYNAMIC PROMPT GENERATOR (WITH Q NUMBERS) =================
   const copyPrompt = () => {
     let langInstruction = "in BOTH English and Hindi (e.g., Eng: [Text]\\nHin: [Text])";
     if (promptLang === 'english') langInstruction = "in ENGLISH ONLY";
@@ -115,15 +120,18 @@ export default function AdminPanel({ onLogout }) {
 
     const promptText = `Generate 10 multiple choice questions for [Subject] class [Class] ${langInstruction}.
 Use standard LaTeX format for ANY Mathematical equations (e.g., $x^2 + y^2 = z^2$) and Chemistry formulas (e.g., $H_2O$).
-Do NOT use JSON or markdown code blocks. Output STRICTLY in this text format:
+Do NOT use JSON or markdown code blocks. Output STRICTLY in this exact text format.
 
-# [Question text here]
+# Q1. [Question text here]
 #1 [Option A]
 #2 [Option B]
 #3 [Option C]
 #4 [Option D]
 @ [Exact string of correct option]
-@@ [Explanation/Review]`;
+@@ [Explanation/Review]
+
+# Q2. [Question text here]
+...and so on.`;
 
     navigator.clipboard.writeText(promptText);
     alert(`Dynamic Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
@@ -323,7 +331,7 @@ Do NOT use JSON or markdown code blocks. Output STRICTLY in this text format:
               <label className="text-green-400 text-sm font-bold mb-2 block">2. Paste Custom Text Format here (Ctrl+V works for Text & Screenshots!)</label>
               <textarea 
                 rows="10" 
-                placeholder="# Question\n#1 Option A\n#2 Option B\n#3 Option C\n#4 Option D\n@ Correct Answer\n@@ Explanation\n\n(Tip: You can directly paste screenshots inside this box!)" 
+                placeholder="# Q1. Question\n#1 Option A\n#2 Option B\n#3 Option C\n#4 Option D\n@ Correct Answer\n@@ Explanation\n\n(Tip: You can directly paste screenshots inside this box!)" 
                 value={newTest.textInput} 
                 onChange={(e) => setNewTest({...newTest, textInput: e.target.value})}
                 onPaste={(e) => handleImagePaste(e, (val) => setNewTest({...newTest, textInput: val}), newTest.textInput)}
@@ -366,7 +374,7 @@ Do NOT use JSON or markdown code blocks. Output STRICTLY in this text format:
               <label className="text-green-400 text-sm font-bold mb-2 block">Paste Custom Text Format here (Ctrl+V works for Screenshots!)</label>
               <textarea 
                 rows="8" 
-                placeholder="# Question..." 
+                placeholder="# Q1. Question..." 
                 value={appendText} 
                 onChange={(e) => setAppendText(e.target.value)} 
                 onPaste={(e) => handleImagePaste(e, setAppendText, appendText)}
