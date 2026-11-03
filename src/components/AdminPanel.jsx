@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, where, updateDoc } from 'firebase/firestore';
 
@@ -23,6 +23,9 @@ export default function AdminPanel({ onLogout }) {
   const [appendTest, setAppendTest] = useState('');
   const [appendText, setAppendText] = useState('');
 
+  const fileInputNewRef = useRef(null);
+  const fileInputAppendRef = useRef(null);
+
   useEffect(() => {
     fetchTests();
     fetchStudents();
@@ -40,25 +43,26 @@ export default function AdminPanel({ onLogout }) {
     setStudents(studentsData);
   };
 
-  // ================= ROBUST IMAGE PASTE HANDLER =================
+  // ================= 100% FIXED IMAGE PASTE (WITH CURSOR LOCK) =================
   const handleImagePaste = (e, isAppendTab = false) => {
-    const items = e.clipboardData?.items;
+    const items = (e.clipboardData || window.clipboardData).items;
     if (!items) return;
 
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf('image') !== -1) {
-        e.preventDefault(); // Only prevent default if it is actually an image
-        const blob = items[i].getAsFile();
-        const reader = new FileReader();
+        e.preventDefault(); 
+        const file = items[i].getAsFile();
         
+        // Lock cursor position BEFORE async reading starts
+        const textarea = e.target;
+        const start = textarea.selectionStart !== undefined ? textarea.selectionStart : textarea.value.length;
+        const end = textarea.selectionEnd !== undefined ? textarea.selectionEnd : textarea.value.length;
+
+        const reader = new FileReader();
         reader.onload = (event) => {
           const base64Data = event.target.result;
           const imgTag = `\n<img src="${base64Data}" alt="question-img" style="max-width:100%; border-radius:8px; margin:10px 0; border: 1px solid #4b5563;" />\n`;
           
-          const textarea = e.target;
-          const start = textarea.selectionStart || 0;
-          const end = textarea.selectionEnd || 0;
-
           if (isAppendTab) {
             setAppendText(prev => prev.substring(0, start) + imgTag + prev.substring(end));
           } else {
@@ -68,12 +72,32 @@ export default function AdminPanel({ onLogout }) {
             }));
           }
         };
-        reader.readAsDataURL(blob);
-        break;
+        reader.readAsDataURL(file);
+        break; 
       }
     }
   };
 
+  // ================= FALLBACK MANUAL IMAGE UPLOAD =================
+  const handleManualImageUpload = (e, isAppendTab = false) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64Data = event.target.result;
+      const imgTag = `\n<img src="${base64Data}" alt="question-img" style="max-width:100%; border-radius:8px; margin:10px 0; border: 1px solid #4b5563;" />\n`;
+      
+      if (isAppendTab) {
+        setAppendText(prev => prev + imgTag);
+      } else {
+        setNewTest(prev => ({ ...prev, textInput: prev.textInput + imgTag }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ================= SUPER CLEANER PARSER =================
   const parseCustomFormat = (rawText) => {
     const lines = rawText.split('\n');
     const questions = [];
@@ -88,30 +112,22 @@ export default function AdminPanel({ onLogout }) {
 
       if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
         if (currentQ) questions.push(currentQ);
-        
         let cleanQ = trimmed.substring(1).trim();
         cleanQ = cleanQ.replace(/^(Q(uestion)?\s*\d+[\.\:\-]?\s*)/i, '');
-        
         currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
         currentMode = 'q';
       } else if (trimmed.startsWith('#1')) {
-        if(!currentQ) return; 
-        currentQ.o1 = trimmed.substring(2).trim(); currentMode = '1';
+        if(!currentQ) return; currentQ.o1 = trimmed.substring(2).trim(); currentMode = '1';
       } else if (trimmed.startsWith('#2')) {
-        if(!currentQ) return;
-        currentQ.o2 = trimmed.substring(2).trim(); currentMode = '2';
+        if(!currentQ) return; currentQ.o2 = trimmed.substring(2).trim(); currentMode = '2';
       } else if (trimmed.startsWith('#3')) {
-        if(!currentQ) return;
-        currentQ.o3 = trimmed.substring(2).trim(); currentMode = '3';
+        if(!currentQ) return; currentQ.o3 = trimmed.substring(2).trim(); currentMode = '3';
       } else if (trimmed.startsWith('#4')) {
-        if(!currentQ) return;
-        currentQ.o4 = trimmed.substring(2).trim(); currentMode = '4';
+        if(!currentQ) return; currentQ.o4 = trimmed.substring(2).trim(); currentMode = '4';
       } else if (trimmed.startsWith('@@')) {
-        if(!currentQ) return;
-        currentQ.exp = trimmed.substring(2).trim(); currentMode = 'exp';
+        if(!currentQ) return; currentQ.exp = trimmed.substring(2).trim(); currentMode = 'exp';
       } else if (trimmed.startsWith('@')) {
-        if(!currentQ) return;
-        currentQ.ans = trimmed.substring(1).trim(); currentMode = 'ans';
+        if(!currentQ) return; currentQ.ans = trimmed.substring(1).trim(); currentMode = 'ans';
       } else if (currentQ) {
         currentQ[currentMode] += '\n' + trimmed;
       }
@@ -128,7 +144,6 @@ export default function AdminPanel({ onLogout }) {
     }));
   };
 
-  // ================= NEW STRICT PROMPT (GAPS INCLUDED) =================
   const copyPrompt = () => {
     let langInstruction = "in BOTH English and Hindi (e.g., Eng: [Text]\\nHin: [Text])";
     if (promptLang === 'english') langInstruction = "in ENGLISH ONLY";
@@ -348,7 +363,11 @@ CRITICAL RULES FOR AI:
             </div>
 
             <div className="w-full mb-8">
-              <label className="text-green-400 text-sm font-bold mb-2 block">2. Paste Custom Text Format here (Ctrl+V works for Text & Screenshots!)</label>
+              <label className="text-green-400 text-sm font-bold mb-2 flex justify-between items-center">
+                <span>2. Paste Custom Text Format here (Ctrl+V works for Text & Screenshots!)</span>
+                <input type="file" accept="image/*" ref={fileInputNewRef} className="hidden" onChange={(e) => handleManualImageUpload(e, false)} />
+                <button onClick={() => fileInputNewRef.current.click()} className="bg-gray-700 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600">📤 Upload Image</button>
+              </label>
               <textarea 
                 rows="10" 
                 placeholder="# Q1. Question\n#1 Option A\n#2 Option B\n#3 Option C\n#4 Option D\n@ Correct Answer\n@@ Explanation\n\n(Tip: You can directly paste screenshots inside this box!)" 
@@ -391,7 +410,11 @@ CRITICAL RULES FOR AI:
             </div>
 
             <div className="w-full mb-6">
-              <label className="text-green-400 text-sm font-bold mb-2 block">Paste Custom Text Format here (Ctrl+V works for Screenshots!)</label>
+              <label className="text-green-400 text-sm font-bold mb-2 flex justify-between items-center">
+                <span>Paste Custom Text Format here (Ctrl+V works for Screenshots!)</span>
+                <input type="file" accept="image/*" ref={fileInputAppendRef} className="hidden" onChange={(e) => handleManualImageUpload(e, true)} />
+                <button onClick={() => fileInputAppendRef.current.click()} className="bg-gray-700 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600">📤 Upload Image</button>
+              </label>
               <textarea 
                 rows="8" 
                 placeholder="# Q1. Question..." 
