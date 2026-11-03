@@ -40,30 +40,42 @@ export default function AdminPanel({ onLogout }) {
     setStudents(studentsData);
   };
 
-  const handleImagePaste = (e, stateUpdater, currentStateValue) => {
+  // ================= BULLETPROOF IMAGE PASTE HANDLER =================
+  const handleImagePaste = (e, isAppendTab = false) => {
     const items = (e.clipboardData || window.clipboardData).items;
-    for (let index in items) {
-      const item = items[index];
-      if (item.kind === 'file' && item.type.startsWith('image/')) {
-        e.preventDefault();
-        const blob = item.getAsFile();
+    
+    // Use traditional for-loop to avoid browser clipboard API iteration bugs
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        e.preventDefault(); // Stop default text paste behavior
+        const blob = items[i].getAsFile();
         const reader = new FileReader();
+        
         reader.onload = (event) => {
           const base64Data = event.target.result;
           const imgTag = `\n<img src="${base64Data}" alt="question-img" style="max-width:100%; border-radius:8px; margin:10px 0; border: 1px solid #4b5563;" />\n`;
+          
           const textarea = e.target;
-          const start = textarea.selectionStart;
-          const end = textarea.selectionEnd;
-          const newText = currentStateValue.substring(0, start) + imgTag + currentStateValue.substring(end);
-          stateUpdater(newText);
+          const start = textarea.selectionStart || 0;
+          const end = textarea.selectionEnd || 0;
+
+          // Functional state update prevents React stale-state issues
+          if (isAppendTab) {
+            setAppendText(prev => prev.substring(0, start) + imgTag + prev.substring(end));
+          } else {
+            setNewTest(prev => ({ 
+              ...prev, 
+              textInput: prev.textInput.substring(0, start) + imgTag + prev.textInput.substring(end) 
+            }));
+          }
         };
         reader.readAsDataURL(blob);
-        return; 
+        break; // Process only one image at a time
       }
     }
   };
 
-  // ================= SUPER CLEANER PARSER (FIXED ERROR) =================
+  // ================= SUPER CLEANER PARSER =================
   const parseCustomFormat = (rawText) => {
     const lines = rawText.split('\n');
     const questions = [];
@@ -73,15 +85,10 @@ export default function AdminPanel({ onLogout }) {
     lines.forEach(line => {
       let trimmed = line.trim();
       
-      // 1. Clean ChatGPT Markdown backslashes from start (e.g. "\# Q1" becomes "# Q1")
+      // Clean ChatGPT Markdown backslashes
       trimmed = trimmed.replace(/^\\+/, '');
-      
-      // 2. Clean stray backslashes at the end of the line (Markdown hard breaks)
-      if (trimmed.endsWith('\\')) {
-        trimmed = trimmed.slice(0, -1).trim();
-      }
-
-      if (!trimmed) return; // Skip empty lines
+      if (trimmed.endsWith('\\')) trimmed = trimmed.slice(0, -1).trim();
+      if (!trimmed) return; 
 
       if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
         if (currentQ) questions.push(currentQ);
@@ -92,7 +99,7 @@ export default function AdminPanel({ onLogout }) {
         currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
         currentMode = 'q';
       } else if (trimmed.startsWith('#1')) {
-        if(!currentQ) return; // Prevent null error
+        if(!currentQ) return; 
         currentQ.o1 = trimmed.substring(2).trim(); currentMode = '1';
       } else if (trimmed.startsWith('#2')) {
         if(!currentQ) return;
@@ -115,7 +122,6 @@ export default function AdminPanel({ onLogout }) {
     });
     
     if (currentQ) questions.push(currentQ);
-
     if(questions.length === 0) throw new Error("No valid questions found! Please check the format.");
 
     return questions.map(q => ({
@@ -348,7 +354,7 @@ CRITICAL RULES FOR AI:
                 placeholder="# Q1. Question\n#1 Option A\n#2 Option B\n#3 Option C\n#4 Option D\n@ Correct Answer\n@@ Explanation\n\n(Tip: You can directly paste screenshots inside this box!)" 
                 value={newTest.textInput} 
                 onChange={(e) => setNewTest({...newTest, textInput: e.target.value})}
-                onPaste={(e) => handleImagePaste(e, (val) => setNewTest({...newTest, textInput: val}), newTest.textInput)}
+                onPaste={(e) => handleImagePaste(e, false)}
                 className="p-5 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-blue-500 leading-relaxed"
               ></textarea>
             </div>
@@ -391,7 +397,7 @@ CRITICAL RULES FOR AI:
                 placeholder="# Q1. Question..." 
                 value={appendText} 
                 onChange={(e) => setAppendText(e.target.value)} 
-                onPaste={(e) => handleImagePaste(e, setAppendText, appendText)}
+                onPaste={(e) => handleImagePaste(e, true)}
                 className="p-5 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-green-500"
               ></textarea>
             </div>
