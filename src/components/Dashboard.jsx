@@ -43,7 +43,7 @@ export default function Dashboard({ user, onLogout }) {
         window.MathJax = {
           tex: { 
             inlineMath: [['$', '$'], ['\\(', '\\)']],
-            displayMath: [['$$', '$$'], ['[', ']']],
+            displayMath: [['$$', '$$'], ['\\[', '\\]']],
             packages: {'[+]': ['mhchem']} 
           },
           loader: {load: ['[tex]/mhchem']},
@@ -298,4 +298,121 @@ export default function Dashboard({ user, onLogout }) {
               <button onClick={() => setLanguage(lang => lang === 'english' ? 'hindi' : 'english')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
                 🌐 {language === 'english' ? 'View in Hindi' : 'View in English'}
               </button>
-              <div
+              <div className={`text-xl md:text-3xl font-extrabold px-4 py-1 rounded-xl shadow-inner ${timeLeft < 300 ? 'bg-red-900 text-red-100 animate-pulse' : 'bg-gray-800 text-yellow-400'}`}>
+                ⏱ {formatTime(timeLeft)}
+              </div>
+              <button onClick={handleSubmitTest} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg hidden md:block">Submit</button>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-4 border-b border-gray-700 flex flex-wrap gap-2 justify-center max-h-40 overflow-y-auto">
+            {questionsList.map((_, idx) => {
+              const status = questionStatus[idx] || 'unattempted';
+              let btnColor = 'bg-blue-600 border-blue-700'; 
+              if (status === 'answered') btnColor = 'bg-green-500 border-green-600';
+              if (status === 'skipped') btnColor = 'bg-red-500 border-red-600';
+              if (currentQIndex === idx) btnColor += ' ring-4 ring-yellow-400 transform scale-110';
+              return <button key={idx} onClick={() => setCurrentQIndex(idx)} className={`w-10 h-10 md:w-12 md:h-12 rounded-lg font-bold text-white border-2 transition-all ${btnColor}`}>{idx + 1}</button>;
+            })}
+          </div>
+
+          <div className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full flex flex-col">
+            <div className="mb-4 flex justify-between items-end">
+              <span className="text-xl md:text-2xl font-bold text-gray-400">Question {currentQIndex + 1} of {questionsList.length}</span>
+              <span className="text-sm text-red-500 font-bold">Warnings: {warnings}/3</span>
+            </div>
+
+            <div className="bg-gray-900 p-6 md:p-10 rounded-3xl border-2 border-gray-700 shadow-xl mb-6 flex-1 overflow-auto">
+              <h3 className="text-2xl md:text-3xl font-semibold text-yellow-300 mb-8 whitespace-pre-wrap leading-relaxed" dangerouslySetInnerHTML={{ __html: parseText(question?.question) }} />
+              <div className="flex flex-col gap-4">
+                {(question?.options || []).map((opt, idx) => (
+                  <button key={idx} onClick={() => handleOptionSelect(opt)} className={`text-left p-5 md:p-6 rounded-2xl text-xl md:text-2xl font-medium border-2 transition-all duration-200 flex items-start gap-3 ${answers[currentQIndex] === opt ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]' : 'bg-black border-gray-600 text-gray-300 hover:bg-gray-800'}`}>
+                    <span className="font-bold">{String.fromCharCode(65 + idx)}.</span>
+                    <span dangerouslySetInnerHTML={{ __html: parseText(opt) }} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-between items-center bg-gray-900 p-4 rounded-2xl border-2 border-gray-800 gap-4">
+              <button disabled={currentQIndex === 0} onClick={() => setCurrentQIndex(prev => prev - 1)} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-xl font-bold text-xl">Previous</button>
+              <button onClick={handleSkip} className="px-6 py-3 bg-red-800 hover:bg-red-700 text-white rounded-xl font-bold text-xl">Skip</button>
+              {currentQIndex < questionsList.length - 1 ? (
+                <button onClick={() => setCurrentQIndex(prev => prev + 1)} className="px-8 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-xl">Next</button>
+              ) : (
+                <button onClick={handleSubmitTest} className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xl md:hidden">Submit</button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (testStatus === 'submitted' && result) {
+      return (
+        <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 flex items-center justify-center font-sans">
+          <div className="bg-gray-900 border-2 border-green-500 rounded-3xl p-8 md:p-12 max-w-3xl w-full text-center shadow-[0_0_40px_rgba(34,197,94,0.3)]">
+            <h1 className="text-4xl md:text-5xl font-extrabold text-green-400 mb-4">Test Submitted!</h1>
+            <h2 className="text-2xl text-yellow-400 mb-8">{activeTest?.subject || 'Test'}</h2>
+            <div className="grid grid-cols-2 gap-4 md:gap-6 mb-8 text-left">
+              <div className="bg-black p-6 rounded-2xl border border-gray-700"><p className="text-gray-400 text-lg">Total Score</p><p className="text-4xl font-bold text-blue-400">{result.obtainedMarks} / {result.totalMarks}</p></div>
+              <div className="bg-black p-6 rounded-2xl border border-gray-700"><p className="text-gray-400 text-lg">Percentage</p><p className="text-4xl font-bold text-yellow-400">{result.percentage}%</p></div>
+            </div>
+            <div className="flex justify-center gap-4">
+              <button onClick={handleReviewClick} className="bg-yellow-600 hover:bg-yellow-700 font-bold py-4 px-8 text-xl rounded-xl">Review Answers</button>
+              <button onClick={() => {setTestStatus('dashboard'); setActiveTest(null);}} className="bg-blue-600 hover:bg-blue-700 font-bold py-4 px-8 text-xl rounded-xl">Dashboard</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (testStatus === 'review' && activeTest) {
+      const questionsList = activeTest.questions || [];
+      return (
+        <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans">
+          <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4 sticky top-0 bg-black z-10 pt-4">
+            <h1 className="text-3xl md:text-4xl font-extrabold text-yellow-400">Review</h1>
+            <button onClick={() => setTestStatus('submitted')} className="bg-gray-700 hover:bg-gray-600 font-bold py-3 px-8 text-xl rounded-xl">Back</button>
+          </div>
+          <div className="max-w-4xl mx-auto flex flex-col gap-8">
+            {questionsList.map((q, idx) => {
+              if (!q) return null;
+              const studentAns = answers[idx]; const isCorrect = studentAns === q.answer; const isUnanswered = !studentAns;
+              return (
+                <div key={idx} className={`bg-gray-900 p-6 md:p-8 rounded-3xl border-l-8 shadow-lg ${isCorrect ? 'border-green-500' : isUnanswered ? 'border-gray-500' : 'border-red-500'}`}>
+                  <h3 className="text-xl md:text-2xl font-bold text-gray-200 mb-6 flex items-start gap-2">
+                    <span>Q{idx + 1}.</span> <span dangerouslySetInnerHTML={{ __html: parseText(q.question) }} />
+                  </h3>
+                  <div className="flex flex-col gap-3 mb-6">
+                    {(q.options || []).map((opt, oIdx) => {
+                      let optStyle = "bg-black border-gray-700 text-gray-400";
+                      if (opt === q.answer) optStyle = "bg-green-900 border-green-500 text-green-100 shadow-[0_0_10px_rgba(34,197,94,0.3)]";
+                      else if (opt === studentAns && !isCorrect) optStyle = "bg-red-900 border-red-500 text-red-100";
+                      return (
+                        <div key={oIdx} className={`p-4 rounded-xl border-2 text-lg flex items-start gap-3 ${optStyle}`}>
+                          <span className="font-bold">{String.fromCharCode(65 + oIdx)}.</span>
+                          <span dangerouslySetInnerHTML={{ __html: parseText(opt) }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (testStatus === 'processing') {
+        return <div className="min-h-screen bg-black text-white flex items-center justify-center"><h2 className="text-3xl animate-pulse">Processing Test...</h2></div>
+    }
+
+    return <div className="min-h-screen bg-black text-white flex items-center justify-center"><h2 className="text-3xl text-red-500">Error: Please refresh the page.</h2></div>;
+    
+  } catch (e) {
+    setTimeout(() => setRenderError(e.message || "Unknown rendering error occurred."), 0);
+    return null;
+  }
+}
