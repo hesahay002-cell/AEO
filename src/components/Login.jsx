@@ -1,28 +1,27 @@
 import React, { useState } from 'react';
 import { db } from '../firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
+
+const classOptions = ["Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12", "NEET", "JEE", "Graduation", "Government Job"];
 
 export default function Login({ onLogin, onAdminLogin }) {
-  const [phone, setPhone] = useState('');
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({ name: '', school: '', className: '', phone: '' });
   const [otp, setOtp] = useState('');
   const [generatedOtp, setGeneratedOtp] = useState('');
-  const [step, setStep] = useState(1); // 1: Phone, 2: OTP
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [studentData, setStudentData] = useState(null);
 
   // ================= META WHATSAPP API SETTINGS =================
-  // YAHAN APNA META API TOKEN AUR PHONE ID DAALEIN
   const META_TOKEN = "EAAUzbFPL5GIBSb8M09o9XYfhoCDcroxJaZCTGl985d2OqgAaZBFiZA3k1ZAWoDhfMzQe2mN8O2tTzLtpAHyxlpaCc9ybSGu1SkAl4f24tjnSfpIyu6gct8CmPVpYijcq8KOAi8TQvQ780W7oDG8PtzkaDqZBS2pLGvgMY3lTUOFkoqGUf8DxvbhXiRGHt3v5sLAZDZD"; 
   const PHONE_NUMBER_ID = "1258484434020011";
   // ==============================================================
 
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
     const url = `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`;
-    
     const payload = {
       messaging_product: "whatsapp",
-      to: `91${phoneNumber}`, // India country code added automatically
+      to: `91${phoneNumber}`,
       type: "template",
       template: {
         name: "aeo_login_otp",
@@ -30,13 +29,12 @@ export default function Login({ onLogin, onAdminLogin }) {
         components: [
           {
             type: "body",
-            parameters: [ { type: "text", text: otpCode } ]
-          },
-          {
-            type: "button",
-            sub_type: "url",
-            index: "0",
-            parameters: [ { type: "text", text: otpCode } ]
+            parameters: [
+              {
+                type: "text",
+                text: otpCode
+              }
+            ]
           }
         ]
       }
@@ -52,10 +50,13 @@ export default function Login({ onLogin, onAdminLogin }) {
         body: JSON.stringify(payload)
       });
       const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
+      if (data.error) {
+          console.error("META API ERROR:", data.error);
+          throw new Error(data.error.message);
+      }
       return true;
     } catch (err) {
-      console.error("WhatsApp API Error:", err);
+      console.error("Fetch Error:", err);
       return false;
     }
   };
@@ -64,45 +65,26 @@ export default function Login({ onLogin, onAdminLogin }) {
     e.preventDefault();
     setError('');
     
-    // ADMIN BYPASS
-    if (phone === 'admin' || phone === '1234567890') {
+    if (formData.phone === 'admin' || formData.phone === '1234567890') {
         onAdminLogin();
         return;
     }
 
-    if (phone.length !== 10) {
-        return setError("Please enter a valid 10-digit mobile number.");
+    if (!formData.name || !formData.school || !formData.className || formData.phone.length !== 10) {
+        return setError("Please fill all fields correctly! Phone must be 10 digits.");
     }
 
     setLoading(true);
     try {
-      // Check if student exists in database
-      const q = query(collection(db, "students"), where("phone", "==", phone));
-      const querySnapshot = await getDocs(q);
-      
-      if (querySnapshot.empty) {
-        setError("Your number is not registered. Please contact Safal Academy.");
-        setLoading(false);
-        return;
-      }
-
-      // Student found
-      const student = querySnapshot.docs[0].data();
-      setStudentData({ id: querySnapshot.docs[0].id, ...student });
-
-      // Generate 4-digit Random OTP
       const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
       setGeneratedOtp(newOtp);
 
-      // Send OTP via Meta WhatsApp API
-      const isSent = await sendWhatsAppOTP(phone, newOtp);
+      const isSent = await sendWhatsAppOTP(formData.phone, newOtp);
       
       if (isSent) {
           setStep(2);
       } else {
-          // Failsafe: Agar API fail ho jaye toh screen par OTP dikha do (Testing ke liye)
-          alert(`API Error! Your OTP is: ${newOtp} (Check console for API error details)`);
-          setStep(2);
+          setError("WhatsApp API Failed! Check Console (F12) for details.");
       }
     } catch (err) {
       setError("Server error. Please try again.");
@@ -111,89 +93,94 @@ export default function Login({ onLogin, onAdminLogin }) {
     }
   };
 
-  const handleVerifyOtp = (e) => {
+  const handleVerifyOtp = async (e) => {
     e.preventDefault();
     setError('');
+    
     if (otp === generatedOtp) {
-      onLogin(studentData);
+      setLoading(true);
+      try {
+        const userRef = doc(db, "students", formData.phone);
+        const userData = { ...formData, uid: formData.phone, joinedAt: new Date().toISOString() };
+        await setDoc(userRef, userData, { merge: true });
+        onLogin(userData);
+      } catch (err) {
+        setError("Database error while saving profile!");
+      }
+      setLoading(false);
     } else {
-      setError("Invalid OTP! Please check your WhatsApp and try again.");
+      setError("Invalid OTP! Please check your WhatsApp.");
     }
   };
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4 font-sans relative overflow-hidden">
-      
-      {/* Background Glow */}
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-900 rounded-full blur-[150px] opacity-30"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-green-900 rounded-full blur-[150px] opacity-20"></div>
+      {/* 3D Background Elements */}
+      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-900 rounded-full blur-[120px] opacity-40"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-green-900 rounded-full blur-[120px] opacity-30"></div>
 
-      <div className="w-full max-w-md bg-gray-900 border border-gray-800 p-8 rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.5)] z-10">
+      {/* 3D Glassmorphism Card */}
+      <div className="w-full max-w-lg bg-gray-900/80 backdrop-blur-xl border-t border-l border-white/10 p-8 rounded-[2rem] shadow-[20px_20px_60px_#000000,-20px_-20px_60px_#111827] z-10 relative">
         
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-extrabold text-blue-500 mb-2 tracking-wide">AEO PORTAL</h1>
-          <p className="text-gray-400 font-medium">Academic Excellence Olympiad</p>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400 mb-2 drop-shadow-lg">AEO PORTAL</h1>
+          <p className="text-gray-400 font-bold tracking-widest text-sm">ACADEMIC EXCELLENCE OLYMPIAD</p>
         </div>
 
         {error && (
-          <div className="bg-red-900/50 border border-red-500 text-red-200 p-4 rounded-xl mb-6 text-center text-sm font-semibold">
+          <div className="bg-red-900/40 border-l-4 border-red-500 text-red-200 p-4 rounded-r-xl mb-6 text-sm font-semibold shadow-inner">
             {error}
           </div>
         )}
 
         {step === 1 ? (
-          <form onSubmit={handleSendOtp} className="flex flex-col gap-6">
-            <div>
-              <label className="block text-gray-400 font-bold mb-2 text-sm uppercase tracking-wider">WhatsApp Number</label>
-              <div className="flex bg-black border-2 border-gray-700 rounded-xl overflow-hidden focus-within:border-green-500 transition-colors">
-                <span className="flex items-center px-4 bg-gray-800 text-gray-300 font-bold border-r border-gray-700">+91</span>
-                <input 
-                  type="tel" 
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, '').slice(0,10))}
-                  placeholder="Enter 10-digit number"
-                  className="w-full bg-transparent text-white text-xl p-4 outline-none font-bold placeholder-gray-600"
-                  autoComplete="off"
-                />
+          <form onSubmit={handleSendOtp} className="flex flex-col gap-5">
+            <div className="relative">
+                <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-1 block">Student Name</label>
+                <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Rahul Kumar" className="w-full bg-gray-950/50 border-t-2 border-l-2 border-black border-b-2 border-r-2 border-gray-700 text-white text-lg p-4 rounded-2xl outline-none focus:border-blue-500 shadow-inner transition-colors" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div className="relative">
+                    <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-1 block">Class</label>
+                    <select value={formData.className} onChange={(e) => setFormData({...formData, className: e.target.value})} className="w-full bg-gray-950/50 border-t-2 border-l-2 border-black border-b-2 border-r-2 border-gray-700 text-white text-lg p-4 rounded-2xl outline-none focus:border-blue-500 shadow-inner appearance-none cursor-pointer">
+                        <option value="" disabled>Select</option>
+                        {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                    </select>
+                </div>
+
+                <div className="relative">
+                    <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-1 block">School</label>
+                    <input type="text" value={formData.school} onChange={(e) => setFormData({...formData, school: e.target.value})} placeholder="DAV" className="w-full bg-gray-950/50 border-t-2 border-l-2 border-black border-b-2 border-r-2 border-gray-700 text-white text-lg p-4 rounded-2xl outline-none focus:border-blue-500 shadow-inner transition-colors" />
+                </div>
+            </div>
+
+            <div className="relative mt-2">
+              <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-1 block">WhatsApp Number</label>
+              <div className="flex bg-gray-950/50 border-t-2 border-l-2 border-black border-b-2 border-r-2 border-gray-700 rounded-2xl overflow-hidden focus-within:border-green-500 shadow-inner transition-colors">
+                <span className="flex items-center px-4 bg-black/40 text-gray-400 font-bold border-r border-gray-800">+91</span>
+                <input type="tel" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value.replace(/[^0-9]/g, '').slice(0,10)})} placeholder="9876543210" className="w-full bg-transparent text-white text-xl p-4 outline-none font-bold placeholder-gray-700" autoComplete="off" />
               </div>
             </div>
             
-            <button 
-              type="submit" 
-              disabled={loading}
-              className="w-full bg-green-600 hover:bg-green-500 text-white font-extrabold text-xl py-4 rounded-xl shadow-[0_0_20px_rgba(22,163,74,0.4)] transition-all disabled:opacity-50 mt-2"
-            >
-              {loading ? 'Sending OTP...' : 'Get OTP on WhatsApp'}
+            <button type="submit" disabled={loading} className="w-full mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xl py-4 rounded-2xl shadow-[0_10px_20px_rgba(37,99,235,0.3)] transform hover:-translate-y-1 transition-all disabled:opacity-50 disabled:transform-none">
+              {loading ? 'Sending...' : 'Get OTP on WhatsApp'}
             </button>
-            
-            <p className="text-center text-gray-500 text-xs mt-4">
-              Protected by Meta WhatsApp Business API
-            </p>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="flex flex-col gap-6">
-            <div className="text-center mb-2">
-              <p className="text-green-400 font-bold">OTP sent to +91 {phone}</p>
-              <button type="button" onClick={() => setStep(1)} className="text-blue-400 text-sm underline hover:text-blue-300 mt-1">Change Number</button>
+            <div className="text-center mb-4 bg-gray-950/50 p-4 rounded-2xl border border-gray-800 shadow-inner">
+              <p className="text-green-400 font-bold text-lg">OTP Sent to +91 {formData.phone}</p>
+              <button type="button" onClick={() => setStep(1)} className="text-blue-400 text-sm font-bold underline hover:text-blue-300 mt-2">Edit Details</button>
             </div>
             
-            <div>
-              <label className="block text-gray-400 font-bold mb-2 text-sm uppercase tracking-wider">Enter 4-Digit OTP</label>
-              <input 
-                type="text" 
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0,4))}
-                placeholder="• • • •"
-                className="w-full bg-black border-2 border-gray-700 rounded-xl text-white text-center text-3xl tracking-[1em] p-4 outline-none focus:border-blue-500 transition-colors font-bold"
-                autoComplete="off"
-              />
+            <div className="relative">
+              <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-1 block text-center">Enter 4-Digit OTP</label>
+              <input type="text" value={otp} onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0,4))} placeholder="••••" className="w-full bg-gray-950/50 border-t-2 border-l-2 border-black border-b-2 border-r-2 border-gray-700 text-white text-center text-4xl tracking-[1em] p-4 rounded-2xl outline-none focus:border-green-500 shadow-inner font-black" autoComplete="off" />
             </div>
             
-            <button 
-              type="submit" 
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xl py-4 rounded-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all mt-2"
-            >
-              Verify & Login
+            <button type="submit" disabled={loading} className="w-full mt-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-extrabold text-xl py-4 rounded-2xl shadow-[0_10px_20px_rgba(16,185,129,0.3)] transform hover:-translate-y-1 transition-all disabled:opacity-50 disabled:transform-none">
+              {loading ? 'Verifying...' : 'Verify & Enter Exam'}
             </button>
           </form>
         )}
