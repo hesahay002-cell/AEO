@@ -5,7 +5,6 @@ import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 export default function Dashboard({ user, onLogout }) {
   const [availableTests, setAvailableTests] = useState([]);
   const [activeTest, setActiveTest] = useState(null);
-  
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [questionStatus, setQuestionStatus] = useState({});
@@ -25,7 +24,7 @@ export default function Dashboard({ user, onLogout }) {
     } catch (error) { console.error(error); }
   };
 
-  // ================= PROSPECTUS MAKER MATHJAX LOADER (mhchem support) =================
+  // ================= SECURE MATHJAX ENGINE =================
   useEffect(() => {
     const renderMath = () => {
       if (window.MathJax && window.MathJax.typesetPromise) {
@@ -44,7 +43,7 @@ export default function Dashboard({ user, onLogout }) {
           tex: { 
             inlineMath: [['$', '$'], ['\\(', '\\)']],
             displayMath: [['$$', '$$'], ['\\[', '\\]']],
-            packages: {'[+]': ['mhchem']} // Chemistry Support
+            packages: {'[+]': ['mhchem']} 
           },
           loader: {load: ['[tex]/mhchem']},
           startup: { typeset: false }
@@ -119,12 +118,24 @@ export default function Dashboard({ user, onLogout }) {
     if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>{});
   };
 
-  // ================= PROSPECTUS MAKER PARSER (Image Tokenizer & inlineMath) =================
+  // ================= THE ULTIMATE PARSER =================
   const parseText = (rawText) => {
     if (!rawText) return "";
     let text = rawText;
 
-    // Extract Eng/Hin first
+    // 1. Markdown Basics
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/__(.*?)__/g, '<u>$1</u>');
+
+    // 2. Safe Image Extraction (Prevents translation engine from breaking images)
+    const imageTokens = [];
+    text = text.replace(/!\[image\]\((data:image\/[^)]+)\)/g, (match, base64) => {
+        const token = `@@IMAGE_TOKEN_${imageTokens.length}@@`;
+        imageTokens.push(`<div style="text-align:center; margin:15px 0;"><img src="${base64}" style="max-width:100%; border-radius:8px; border:2px solid #374151;" /></div>`);
+        return token;
+    });
+
+    // 3. Bilingual Engine
     const hasEng = /Eng:/i.test(text);
     const hasHin = /Hin:/i.test(text);
 
@@ -150,24 +161,15 @@ export default function Dashboard({ user, onLogout }) {
       text = language === 'english' ? parts[0].trim() : (parts[1] ? parts[1].trim() : parts[0].trim());
     }
 
-    // Advanced Tokenizer for Images & Math from Prospectus HTML
-    const imageTokens = [];
-    text = text.replace(/!\[image\]\((data:image\/[^)]+)\)/g, (match, base64) => {
-        const token = `@@IMAGE_TOKEN_${imageTokens.length}@@`;
-        imageTokens.push(`<div style="text-align:left; margin:10px 0;"><img src="${base64}" style="max-width:100%; max-height:250px; border-radius:8px; border:2px solid #374151;" /></div>`);
-        return token;
-    });
-
-    // Fix Math Arrows and wrap Double Dollars to Inline (Prospectus logic)
+    // 4. Prospectus Maker Math Fixes
     text = text.replace(/\\xrightarrow(?!\s*\{)/g, '\\rightarrow');
     text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, formula) => '\\(' + formula.trim() + '\\)');
 
-    // Restore Images
+    // 5. Restore Images
     for (let i = 0; i < imageTokens.length; i++) {
         text = text.replace(`@@IMAGE_TOKEN_${i}@@`, imageTokens[i]);
     }
     
-    // Replace newlines with <br/> for clean display
     return text.replace(/\n/g, '<br/>');
   };
 
