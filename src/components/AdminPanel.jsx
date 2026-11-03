@@ -24,6 +24,7 @@ export default function AdminPanel({ onLogout }) {
   const [appendTest, setAppendTest] = useState('');
   const [appendText, setAppendText] = useState('');
 
+  // IMAGE EDITOR MODAL (From GUESS PAPER PRO)
   const [imgModal, setImgModal] = useState({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   const [imgSettings, setImgSettings] = useState({ brightness: 100, contrast: 100, grayscale: 0 });
   const currentImgRef = useRef(new Image());
@@ -72,11 +73,11 @@ export default function AdminPanel({ onLogout }) {
     }
   };
 
-  // 100% SAFE IMAGE INSERTION
   const insertProcessedImage = () => {
     const cvs = document.createElement('canvas');
     const ctx = cvs.getContext('2d');
     
+    // Auto-Resize
     let width = currentImgRef.current.width;
     let height = currentImgRef.current.height;
     const MAX_WIDTH = 800;
@@ -90,67 +91,63 @@ export default function AdminPanel({ onLogout }) {
     ctx.drawImage(currentImgRef.current, 0, 0, width, height);
     
     const finalBase64 = cvs.toDataURL('image/jpeg', 0.75); 
-    // SAFEST WAY: Wrap image in a unique tag that regex won't mess with
-    const imgHTML = `\n[IMAGE_START]${finalBase64}[IMAGE_END]\n`;
+    // MARKDOWN IMAGE FORMAT (From GUESS PAPER PRO)
+    const imgMarkdown = `\n![image](${finalBase64})\n`;
     
     if (imgModal.targetTab === 'new') {
-        setNewTest(prev => ({ ...prev, textInput: prev.textInput.substring(0, imgModal.start) + imgHTML + prev.textInput.substring(imgModal.end) }));
+        setNewTest(prev => ({ ...prev, textInput: prev.textInput.substring(0, imgModal.start) + imgMarkdown + prev.textInput.substring(imgModal.end) }));
     } else {
-        setAppendText(prev => prev.substring(0, imgModal.start) + imgHTML + prev.substring(imgModal.end));
+        setAppendText(prev => prev.substring(0, imgModal.start) + imgMarkdown + prev.substring(imgModal.end));
     }
     setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   };
 
-  // INDESTRUCTIBLE PARSER: Guaranteed to never split questions wrongly
+  // PROSPECTUS MAKER CLEAN PARSER
   const parseCustomFormat = (rawText) => {
-    // Split ONLY by "# Q" to guarantee strictly 10 blocks
-    const blocks = String(rawText).split(/(?=#\s*Q\d+)/i).map(b => b.trim()).filter(b => b);
+    const lines = String(rawText).split('\n');
+    const questions = [];
+    let currentQ = null;
+    let currentMode = '';
+    let optCount = 0;
     let preamble = '';
 
-    if (blocks.length > 0 && !blocks[0].match(/^#\s*Q\d+/i)) {
-        preamble = blocks.shift(); // Capture image/text pasted BEFORE Q1
-    }
+    lines.forEach(line => {
+      let trimmed = line.trim();
+      trimmed = trimmed.replace(/^\\+/, '');
+      if (trimmed.endsWith('\\')) trimmed = trimmed.slice(0, -1).trim();
+      if (!trimmed) return; 
 
-    const questions = blocks.map((block, index) => {
-        let qText = "", o1 = "", o2 = "", o3 = "", o4 = "", ans = "", exp = "";
-        let currentMode = "q";
-        
-        const lines = block.split('\n');
-        lines.forEach(line => {
-            let t = line.trim();
-            if (!t) return;
-            
-            if (t.match(/^#\s*Q\d+/i)) {
-                qText += t.replace(/^#\s*Q\d+[\.\:\-]?\s*/i, '') + "\n";
-            } else if (t.startsWith('#1')) { currentMode = 'o1'; o1 += t.substring(2).trim() + "\n"; }
-            else if (t.startsWith('#2')) { currentMode = 'o2'; o2 += t.substring(2).trim() + "\n"; }
-            else if (t.startsWith('#3')) { currentMode = 'o3'; o3 += t.substring(2).trim() + "\n"; }
-            else if (t.startsWith('#4')) { currentMode = 'o4'; o4 += t.substring(2).trim() + "\n"; }
-            else if (t.startsWith('@@')) { currentMode = 'exp'; exp += t.substring(2).trim() + "\n"; }
-            else if (t.startsWith('@')) { currentMode = 'ans'; ans += t.substring(1).trim() + "\n"; }
-            else {
-                if (currentMode === 'q') qText += t + "\n";
-                else if (currentMode === 'o1') o1 += t + "\n";
-                else if (currentMode === 'o2') o2 += t + "\n";
-                else if (currentMode === 'o3') o3 += t + "\n";
-                else if (currentMode === 'o4') o4 += t + "\n";
-                else if (currentMode === 'ans') ans += t + "\n";
-                else if (currentMode === 'exp') exp += t + "\n";
-            }
-        });
-
-        if (index === 0 && preamble) qText = preamble + "\n" + qText;
-
-        return {
-            question: qText.trim(),
-            options: [o1.trim(), o2.trim(), o3.trim(), o4.trim()].filter(Boolean),
-            answer: ans.trim(),
-            review: exp.trim()
-        };
+      if (trimmed.startsWith('@@@')) {
+          if (!currentQ) return;
+          optCount++;
+          if (optCount === 1) { currentQ.o1 = trimmed.substring(3).trim(); currentMode = 'o1'; }
+          else if (optCount === 2) { currentQ.o2 = trimmed.substring(3).trim(); currentMode = 'o2'; }
+          else if (optCount === 3) { currentQ.o3 = trimmed.substring(3).trim(); currentMode = 'o3'; }
+          else if (optCount === 4) { currentQ.o4 = trimmed.substring(3).trim(); currentMode = 'o4'; }
+      } else if (trimmed.startsWith('@@')) {
+          if (!currentQ) return; currentQ.ans = trimmed.substring(2).replace(/^Answer:/i, '').trim(); currentMode = 'ans';
+      } else if (trimmed.startsWith('@')) {
+          if (currentQ) questions.push(currentQ);
+          let cleanQ = trimmed.substring(1).trim().replace(/^\d+[\.\:\-]?\s*/, '');
+          if (preamble) { cleanQ = preamble + "\n\n" + cleanQ; preamble = ''; }
+          currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
+          optCount = 0; currentMode = 'q';
+      } else if (currentQ) {
+          currentQ[currentMode] += '\n' + trimmed;
+      } else {
+          preamble += '\n' + trimmed;
+      }
     });
+    
+    if (currentQ) questions.push(currentQ);
+    if(questions.length === 0) throw new Error("No valid questions found! Start questions with '@'.");
 
-    if(questions.length === 0) throw new Error("Format Error: Har question '# Q1.' se start hona chahiye.");
-    return questions;
+    return questions.map(q => ({
+      question: (q.q || '').trim(),
+      options: [(q.o1 || '').trim(), (q.o2 || '').trim(), (q.o3 || '').trim(), (q.o4 || '').trim()].filter(Boolean),
+      answer: (q.ans || '').trim(),
+      review: (q.exp || '').trim()
+    }));
   };
 
   const copyPrompt = () => {
@@ -161,27 +158,23 @@ export default function AdminPanel({ onLogout }) {
     const promptText = `Act as an expert exam setter. Generate 10 multiple choice questions for [Subject] class [Class] ${langInstruction}.
     
 CRITICAL RULES FOR AI:
-1. Start EVERY question strictly with "# Q" followed by number (e.g., # Q1.)
-2. Start options strictly with #1, #2, #3, #4
-3. Provide the EXACT correct option text starting with "@ "
-4. Provide the explanation starting with "@@ "
-5. Leave exactly one blank line before the next question starts.
-6. MANDATORY: ALWAYS wrap EVERY math/chemistry equation or formula in dollar signs ($). For example: $\\ce{H2O}$ or $C_2H_5Cl$ or $\\ce{CH3Cl}$. Never use \\ce without wrapping it in $.
-7. Do NOT use markdown code blocks or JSON.
+1. Start EVERY question with "@" followed by number (e.g., @ 1.)
+2. Start options strictly with "@@@"
+3. Provide the EXACT correct option text starting with "@@"
+4. Leave exactly one blank line before the next question starts.
+5. MANDATORY: ALWAYS wrap EVERY math/chemistry equation or formula in dollar signs ($). For example: $\\ce{H2O}$ or $C_2H_5Cl$ or $\\ce{CH3Cl}$. Never use \\ce without wrapping it in $.
+6. Do NOT use markdown code blocks or JSON.
 
 Output Format Example:
-# Q1. Question text here $\\ce{H2O}$
-#1 Option A
-#2 Option B
-#3 Option C
-#4 Option D
-@ Correct Option Text
-@@ Explanation Text
-
-# Q2. Next Question...`;
+@ 1. Question text here $\\ce{H2O}$
+@@@ Option A
+@@@ Option B
+@@@ Option C
+@@@ Option D
+@@ Correct Option Text`;
 
     navigator.clipboard.writeText(promptText);
-    alert(`Strict Dynamic Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
+    alert(`Prospectus Format Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
   };
 
   const handleGenerateTest = async () => {
@@ -264,10 +257,11 @@ Output Format Example:
   return (
     <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans relative">
       
+      {/* GUESS PAPER PRO IMAGE MODAL UI */}
       {imgModal.isOpen && (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4">
           <div className="bg-gray-900 border-2 border-blue-500 rounded-2xl p-6 md:p-10 w-full max-w-2xl shadow-[0_0_40px_rgba(0,0,255,0.4)] flex flex-col items-center">
-            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Adjust Image</h2>
+            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Adjust & Clean Image</h2>
             
             <div className="w-full bg-black rounded-lg overflow-hidden border border-gray-700 flex items-center justify-center p-2 mb-6" style={{ minHeight: '200px' }}>
               <img src={imgModal.src} alt="Preview" style={{ filter: `brightness(${imgSettings.brightness}%) contrast(${imgSettings.contrast}%) grayscale(${imgSettings.grayscale}%)`, maxHeight: '300px' }} className="max-w-full object-contain rounded-md" />
@@ -279,18 +273,18 @@ Output Format Example:
             </div>
             
             <div className="w-full mb-4">
-              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Contrast</span><span className="text-blue-400">{imgSettings.contrast}%</span></label>
+              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Contrast (Clean Text)</span><span className="text-blue-400">{imgSettings.contrast}%</span></label>
               <input type="range" min="50" max="200" value={imgSettings.contrast} onChange={(e) => setImgSettings({...imgSettings, contrast: e.target.value})} className="w-full cursor-pointer" />
             </div>
             
             <div className="w-full mb-8">
-              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Grayscale</span><span className="text-blue-400">{imgSettings.grayscale}%</span></label>
+              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Grayscale (B&W)</span><span className="text-blue-400">{imgSettings.grayscale}%</span></label>
               <input type="range" min="0" max="100" value={imgSettings.grayscale} onChange={(e) => setImgSettings({...imgSettings, grayscale: e.target.value})} className="w-full cursor-pointer" />
             </div>
 
             <div className="flex gap-4 w-full">
               <button onClick={() => setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 })} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl text-lg">Cancel</button>
-              <button onClick={insertProcessedImage} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg shadow-[0_0_15px_rgba(34,197,94,0.4)]">✅ Insert</button>
+              <button onClick={insertProcessedImage} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg shadow-[0_0_15px_rgba(34,197,94,0.4)]">✅ Insert Image</button>
             </div>
           </div>
         </div>
@@ -364,7 +358,7 @@ Output Format Example:
                 onChange={(e) => setNewTest({...newTest, textInput: e.target.value})}
                 onPaste={(e) => handleImagePaste(e, 'new')}
                 className="p-5 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-blue-500 leading-relaxed"
-                placeholder="# Q1. Question..."
+                placeholder="@ 1. Question..."
               ></textarea>
             </div>
             
