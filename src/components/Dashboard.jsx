@@ -137,16 +137,23 @@ export default function Dashboard({ user, onLogout }) {
     if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>console.error(e));
   };
 
+  // THE ULTIMATE SAFE PARSER (PROTECTS BASE64 IMAGES)
   const parseText = (rawText) => {
     if (!rawText) return "";
     let text = String(rawText);
 
+    // 1. CHHUPAO IMAGE KO
+    const imageTokens = [];
+    text = text.replace(/\[IMAGE_START\](.*?)\[IMAGE_END\]/g, (match, base64) => {
+        const token = `@@IMG_${imageTokens.length}@@`;
+        imageTokens.push(`<div style="text-align:center; margin:15px 0;"><img src="${base64}" style="max-width:100%; border-radius:8px; border:2px solid #374151;" /></div>`);
+        return token;
+    });
+
     text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     text = text.replace(/__(.*?)__/g, '<u>$1</u>');
 
-    // Make sure \ce commands are wrapped in $ for MathJax
-    text = text.replace(/(?<!\$)\\ce\{([^}]+)\}(?!\$)/g, '$\\ce{$1}$');
-
+    // 2. SAFE LANGUAGE SPLIT (AB BASE64 NAHI KATEGA)
     const hasEng = /Eng:/i.test(text);
     const hasHin = /Hin:/i.test(text);
 
@@ -161,23 +168,29 @@ export default function Dashboard({ user, onLogout }) {
       const engMatch = text.match(/Eng:\s*([\s\S]*?)(?=Hin:|$)/i);
       const hinMatch = text.match(/Hin:\s*([\s\S]*?)$/i);
 
-      let engPart = engMatch ? engMatch[1].trim() : '';
-      let hinPart = hinMatch ? hinMatch[1].trim() : '';
+      let engPart = engMatch && engMatch[1] ? engMatch[1].trim() : '';
+      let hinPart = hinMatch && hinMatch[1] ? hinMatch[1].trim() : '';
       if (!engPart && hinPart) engPart = hinPart;
       if (!hinPart && engPart) hinPart = engPart;
 
       text = sharedText ? `${sharedText}<br/><br/>${language === 'english' ? engPart : hinPart}` : (language === 'english' ? engPart : hinPart);
     } else if (text.includes(" / ")) {
       const parts = text.split(" / ");
-      text = language === 'english' ? parts[0].trim() : (parts[1] ? parts[1].trim() : parts[0].trim());
+      text = language === 'english' ? (parts[0]||'').trim() : (parts[1] ? parts[1].trim() : (parts[0]||'').trim());
     }
 
     text = text.replace(/\\xrightarrow(?!\s*\{)/g, '\\rightarrow');
-    
-    // Safely replace $$ with \( \)
-    text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, formula) => '\\(' + formula.trim() + '\\)');
+    text = text.replace(/(?<!\$)\\ce\{([^}]+)\}(?!\$)/g, '$\\ce{$1}$');
+    text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, formula) => '\\(' + (formula||'').trim() + '\\)');
 
-    return text.replace(/\n/g, '<br/>');
+    text = text.replace(/\n/g, '<br/>');
+
+    // 3. WAPAS LAO IMAGE KO
+    for (let i = 0; i < imageTokens.length; i++) {
+        text = text.replace(`@@IMG_${i}@@`, imageTokens[i]);
+    }
+    
+    return text;
   };
 
   const handleOptionSelect = (opt) => {
