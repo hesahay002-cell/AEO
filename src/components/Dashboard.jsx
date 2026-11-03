@@ -97,7 +97,6 @@ export default function Dashboard({ user, onLogout }) {
 
   useEffect(() => { if (warnings >= 3 && testStatus === 'taking') { handleSubmitTest(); } }, [warnings, testStatus]);
 
-  // ================= MISSING FUNCTION ADDED BACK =================
   const checkTimeStatus = (startTime, endTime) => {
     const now = new Date().getTime();
     const start = new Date(startTime).getTime();
@@ -145,6 +144,9 @@ export default function Dashboard({ user, onLogout }) {
     text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     text = text.replace(/__(.*?)__/g, '<u>$1</u>');
 
+    // Make sure \ce commands are wrapped in $ for MathJax
+    text = text.replace(/(?<!\$)\\ce\{([^}]+)\}(?!\$)/g, '$\\ce{$1}$');
+
     const hasEng = /Eng:/i.test(text);
     const hasHin = /Hin:/i.test(text);
 
@@ -171,6 +173,8 @@ export default function Dashboard({ user, onLogout }) {
     }
 
     text = text.replace(/\\xrightarrow(?!\s*\{)/g, '\\rightarrow');
+    
+    // Safely replace $$ with \( \)
     text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, formula) => '\\(' + formula.trim() + '\\)');
 
     return text.replace(/\n/g, '<br/>');
