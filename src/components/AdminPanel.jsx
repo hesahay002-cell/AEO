@@ -99,12 +99,12 @@ export default function AdminPanel({ onLogout }) {
     setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   };
 
+  // ================= 100% INDESTRUCTIBLE PARSER =================
   const parseCustomFormat = (rawText) => {
     const lines = String(rawText).split('\n');
     const questions = [];
     let currentQ = null;
-    let currentMode = '';
-    let optCount = 0;
+    let currentMode = 'q';
     let preamble = ''; 
 
     lines.forEach(line => {
@@ -113,45 +113,41 @@ export default function AdminPanel({ onLogout }) {
       if (trimmed.endsWith('\\')) trimmed = trimmed.slice(0, -1).trim();
       if (!trimmed) return; 
 
-      if (trimmed.startsWith('@@@')) {
-          if (!currentQ) return;
-          optCount++;
-          if (optCount === 1) { currentQ.o1 = trimmed.substring(3).trim(); currentMode = 'o1'; }
-          else if (optCount === 2) { currentQ.o2 = trimmed.substring(3).trim(); currentMode = 'o2'; }
-          else if (optCount === 3) { currentQ.o3 = trimmed.substring(3).trim(); currentMode = 'o3'; }
-          else if (optCount === 4) { currentQ.o4 = trimmed.substring(3).trim(); currentMode = 'o4'; }
-      } else if (trimmed.startsWith('@@')) {
-          if (!currentQ) return; currentQ.ans = trimmed.substring(2).replace(/^Answer:/i, '').trim(); currentMode = 'ans';
-      } else if (trimmed.startsWith('@')) {
-          if (currentQ) questions.push(currentQ);
-          let cleanQ = trimmed.substring(1).trim().replace(/^\d+[\.\:\-]?\s*/, '');
-          if (preamble) { cleanQ = preamble + "\n<br/>" + cleanQ; preamble = ''; } 
-          currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
-          optCount = 0; currentMode = 'q';
-      } 
-      else if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
+      // STRICT LOCK: Naya question sirf tab banega jab '# Q' se shuru ho
+      const isNewQuestion = /^#\s*Q?\d+[\.\:\-]?\s*/i.test(trimmed);
+
+      if (isNewQuestion) {
         if (currentQ) questions.push(currentQ);
-        let cleanQ = trimmed.substring(1).trim().replace(/^(Q(uestion)?\s*\d+[\.\:\-]?\s*)/i, '');
-        if (preamble) { cleanQ = preamble + "\n<br/>" + cleanQ; preamble = ''; } 
+        let cleanQ = trimmed.replace(/^#\s*Q?\d+[\.\:\-]?\s*/i, '');
+        if (preamble) { cleanQ = preamble + "\n" + cleanQ; preamble = ''; } 
         currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
-        optCount = 0; currentMode = 'q';
-      } else if (trimmed.startsWith('#1')) {
-        if(!currentQ) return; currentQ.o1 = trimmed.substring(2).trim(); currentMode = 'o1';
+        currentMode = 'q';
+      } 
+      else if (trimmed.startsWith('#1')) {
+        if (currentQ) { currentQ.o1 = trimmed.substring(2).trim(); currentMode = 'o1'; }
       } else if (trimmed.startsWith('#2')) {
-        if(!currentQ) return; currentQ.o2 = trimmed.substring(2).trim(); currentMode = 'o2';
+        if (currentQ) { currentQ.o2 = trimmed.substring(2).trim(); currentMode = 'o2'; }
       } else if (trimmed.startsWith('#3')) {
-        if(!currentQ) return; currentQ.o3 = trimmed.substring(2).trim(); currentMode = 'o3';
+        if (currentQ) { currentQ.o3 = trimmed.substring(2).trim(); currentMode = 'o3'; }
       } else if (trimmed.startsWith('#4')) {
-        if(!currentQ) return; currentQ.o4 = trimmed.substring(2).trim(); currentMode = 'o4';
-      } else if (currentQ) {
-        currentQ[currentMode] += '\n' + trimmed;
-      } else {
-        preamble += '\n' + trimmed; 
+        if (currentQ) { currentQ.o4 = trimmed.substring(2).trim(); currentMode = 'o4'; }
+      } else if (trimmed.startsWith('@@')) {
+        if (currentQ) { currentQ.exp = trimmed.substring(2).trim(); currentMode = 'exp'; }
+      } else if (trimmed.startsWith('@')) {
+        if (currentQ) { currentQ.ans = trimmed.substring(1).trim(); currentMode = 'ans'; }
+      } 
+      else {
+        // Agar koi aur text ya image code hai, toh wo usi question mein judega
+        if (currentQ) {
+          currentQ[currentMode] += '\n' + trimmed;
+        } else {
+          preamble += '\n' + trimmed; // Q1 aane se pehle ki image
+        }
       }
     });
     
     if (currentQ) questions.push(currentQ);
-    if(questions.length === 0) throw new Error("No valid questions found! Start questions with '@' or '# Q1'.");
+    if(questions.length === 0) throw new Error("Format Error: Har question '# Q1.' se start hona chahiye.");
 
     return questions.map(q => ({
       question: (q.q || '').trim(),
@@ -169,22 +165,27 @@ export default function AdminPanel({ onLogout }) {
     const promptText = `Act as an expert exam setter. Generate 10 multiple choice questions for [Subject] class [Class] ${langInstruction}.
     
 CRITICAL RULES FOR AI:
-1. Start EVERY question with "@" followed by number.
-2. Start EVERY option with "@@@"
-3. Provide the EXACT correct option text starting with "@@"
-4. Use standard LaTeX for Mathematical/Chemistry equations.
-5. Do NOT use markdown code blocks. Do NOT use JSON.
+1. Start EVERY question with "# Q" followed by number (e.g., # Q1.)
+2. Start options strictly with #1, #2, #3, #4
+3. Provide the EXACT correct option text starting with "@ "
+4. Provide the explanation starting with "@@ "
+5. Leave exactly one blank line before the next question starts.
+6. Use standard LaTeX for Mathematical/Chemistry equations (e.g., $$C_2H_5Cl$$ or \\ce{H2O}).
+7. Do NOT use markdown code blocks or JSON.
 
 Output Format Example:
-@ 1. Question text
-@@@ Option A
-@@@ Option B
-@@@ Option C
-@@@ Option D
-@@ Correct Option Text`;
+# Q1. Question text here
+#1 Option A
+#2 Option B
+#3 Option C
+#4 Option D
+@ Correct Option Text
+@@ Explanation Text
+
+# Q2. Next Question...`;
 
     navigator.clipboard.writeText(promptText);
-    alert(`Prospectus Format Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
+    alert(`Strict Dynamic Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
   };
 
   const handleGenerateTest = async () => {
@@ -367,7 +368,7 @@ Output Format Example:
                 onChange={(e) => setNewTest({...newTest, textInput: e.target.value})}
                 onPaste={(e) => handleImagePaste(e, 'new')}
                 className="p-5 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-blue-500 leading-relaxed"
-                placeholder="@ 1. Question..."
+                placeholder="# Q1. Question..."
               ></textarea>
             </div>
             
