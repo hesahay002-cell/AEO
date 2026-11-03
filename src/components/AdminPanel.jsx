@@ -23,7 +23,6 @@ export default function AdminPanel({ onLogout }) {
   const [appendTest, setAppendTest] = useState('');
   const [appendText, setAppendText] = useState('');
 
-  // ================= IMAGE MODAL STATE =================
   const [imgModal, setImgModal] = useState({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   const [imgSettings, setImgSettings] = useState({ brightness: 100, contrast: 100, grayscale: 0 });
   const currentImgRef = useRef(new Image());
@@ -40,7 +39,7 @@ export default function AdminPanel({ onLogout }) {
     setStudents(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
   };
 
-  // ================= IMAGE PASTE HANDLER =================
+  // ================= IMAGE COMPRESSOR (FIXES FIREBASE 1MB CRASH) =================
   const handleImagePaste = (e, tab) => {
     const items = (e.clipboardData || e.originalEvent?.clipboardData || window.clipboardData).items;
     if (!items) return;
@@ -72,33 +71,39 @@ export default function AdminPanel({ onLogout }) {
   const insertProcessedImage = () => {
     const cvs = document.createElement('canvas');
     const ctx = cvs.getContext('2d');
-    cvs.width = currentImgRef.current.width;
-    cvs.height = currentImgRef.current.height;
+    
+    // Auto-Resize to prevent Firebase Limit Crash
+    let width = currentImgRef.current.width;
+    let height = currentImgRef.current.height;
+    const MAX_WIDTH = 800;
+    if (width > MAX_WIDTH) {
+        height = Math.round((height * MAX_WIDTH) / width);
+        width = MAX_WIDTH;
+    }
+    cvs.width = width; cvs.height = height;
     
     ctx.filter = `brightness(${imgSettings.brightness}%) contrast(${imgSettings.contrast}%) grayscale(${imgSettings.grayscale}%)`;
-    ctx.drawImage(currentImgRef.current, 0, 0);
+    ctx.drawImage(currentImgRef.current, 0, 0, width, height);
     
-    // Export as compressed JPEG
-    const finalBase64 = cvs.toDataURL('image/jpeg', 0.85); 
+    // High Compression JPEG
+    const finalBase64 = cvs.toDataURL('image/jpeg', 0.75); 
     const imgMarkdown = `\n![image](${finalBase64})\n`;
     
     if (imgModal.targetTab === 'new') {
-        setNewTest(prev => ({ 
-          ...prev, 
-          textInput: prev.textInput.substring(0, imgModal.start) + imgMarkdown + prev.textInput.substring(imgModal.end) 
-        }));
+        setNewTest(prev => ({ ...prev, textInput: prev.textInput.substring(0, imgModal.start) + imgMarkdown + prev.textInput.substring(imgModal.end) }));
     } else {
         setAppendText(prev => prev.substring(0, imgModal.start) + imgMarkdown + prev.substring(imgModal.end));
     }
     setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   };
 
-  // ================= AEO CUSTOM PARSER =================
+  // ================= UNIVERSAL HYBRID PARSER =================
   const parseCustomFormat = (rawText) => {
     const lines = rawText.split('\n');
     const questions = [];
     let currentQ = null;
     let currentMode = '';
+    let optCount = 0;
 
     lines.forEach(line => {
       let trimmed = line.trim();
@@ -106,31 +111,43 @@ export default function AdminPanel({ onLogout }) {
       if (trimmed.endsWith('\\')) trimmed = trimmed.slice(0, -1).trim();
       if (!trimmed) return; 
 
-      if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
-        if (currentQ) questions.push(currentQ);
-        let cleanQ = trimmed.substring(1).trim();
-        cleanQ = cleanQ.replace(/^(Q(uestion)?\s*\d+[\.\:\-]?\s*)/i, '');
-        currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
-        currentMode = 'q';
-      } else if (trimmed.startsWith('#1')) {
-        if(!currentQ) return; currentQ.o1 = trimmed.substring(2).trim(); currentMode = '1';
-      } else if (trimmed.startsWith('#2')) {
-        if(!currentQ) return; currentQ.o2 = trimmed.substring(2).trim(); currentMode = '2';
-      } else if (trimmed.startsWith('#3')) {
-        if(!currentQ) return; currentQ.o3 = trimmed.substring(2).trim(); currentMode = '3';
-      } else if (trimmed.startsWith('#4')) {
-        if(!currentQ) return; currentQ.o4 = trimmed.substring(2).trim(); currentMode = '4';
+      // 1. PROSPECTUS FORMAT MATCH (@, @@@, @@)
+      if (trimmed.startsWith('@@@')) {
+          if (!currentQ) return;
+          optCount++;
+          if (optCount === 1) { currentQ.o1 = trimmed.substring(3).trim(); currentMode = 'o1'; }
+          else if (optCount === 2) { currentQ.o2 = trimmed.substring(3).trim(); currentMode = 'o2'; }
+          else if (optCount === 3) { currentQ.o3 = trimmed.substring(3).trim(); currentMode = 'o3'; }
+          else if (optCount === 4) { currentQ.o4 = trimmed.substring(3).trim(); currentMode = 'o4'; }
       } else if (trimmed.startsWith('@@')) {
-        if(!currentQ) return; currentQ.exp = trimmed.substring(2).trim(); currentMode = 'exp';
+          if (!currentQ) return; currentQ.ans = trimmed.substring(2).replace(/^Answer:/i, '').trim(); currentMode = 'ans';
       } else if (trimmed.startsWith('@')) {
-        if(!currentQ) return; currentQ.ans = trimmed.substring(1).trim(); currentMode = 'ans';
+          if (currentQ) questions.push(currentQ);
+          let cleanQ = trimmed.substring(1).trim().replace(/^\d+[\.\:\-]?\s*/, '');
+          currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
+          optCount = 0; currentMode = 'q';
+      } 
+      // 2. OLD FORMAT MATCH (# Q1, #1)
+      else if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
+        if (currentQ) questions.push(currentQ);
+        let cleanQ = trimmed.substring(1).trim().replace(/^(Q(uestion)?\s*\d+[\.\:\-]?\s*)/i, '');
+        currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
+        optCount = 0; currentMode = 'q';
+      } else if (trimmed.startsWith('#1')) {
+        if(!currentQ) return; currentQ.o1 = trimmed.substring(2).trim(); currentMode = 'o1';
+      } else if (trimmed.startsWith('#2')) {
+        if(!currentQ) return; currentQ.o2 = trimmed.substring(2).trim(); currentMode = 'o2';
+      } else if (trimmed.startsWith('#3')) {
+        if(!currentQ) return; currentQ.o3 = trimmed.substring(2).trim(); currentMode = 'o3';
+      } else if (trimmed.startsWith('#4')) {
+        if(!currentQ) return; currentQ.o4 = trimmed.substring(2).trim(); currentMode = 'o4';
       } else if (currentQ) {
         currentQ[currentMode] += '\n' + trimmed;
       }
     });
     
     if (currentQ) questions.push(currentQ);
-    if(questions.length === 0) throw new Error("No valid questions found! Please check the format.");
+    if(questions.length === 0) throw new Error("No valid questions found! Start questions with '@' or '# Q1'.");
 
     return questions.map(q => ({
       question: q.q.trim(),
@@ -140,7 +157,7 @@ export default function AdminPanel({ onLogout }) {
     }));
   };
 
-  // ================= STRICT DYNAMIC PROMPT =================
+  // ================= PROSPECTUS MAKER AI PROMPT =================
   const copyPrompt = () => {
     let langInstruction = "in BOTH English and Hindi (e.g., Eng: [Text]\\nHin: [Text])";
     if (promptLang === 'english') langInstruction = "in ENGLISH ONLY";
@@ -149,24 +166,22 @@ export default function AdminPanel({ onLogout }) {
     const promptText = `Act as an expert exam setter. Generate 10 multiple choice questions for [Subject] class [Class] ${langInstruction}.
     
 CRITICAL RULES FOR AI:
-1. Start EVERY single question with "# Q" followed by the number. (e.g., # Q1. Eng: ...)
-2. Do NOT use JSON or markdown code blocks (No \`\`\`). Do NOT use backslashes (\\) to escape characters.
-3. Use standard LaTeX format for Mathematical equations and Chemistry formulas (e.g., $$C_2H_5Cl$$ or \\ce{H2O}).
-4. GAPING RULE: You MUST leave exactly ONE BLANK LINE between the explanation (@@) of the previous question and the start (# Q) of the next question. Do NOT cluster questions together.
-5. Output STRICTLY in this exact text format and do not add any conversational text:
+1. Start EVERY question with "@" followed by number. (e.g., @ 1. Eng: ...)
+2. Start EVERY option with "@@@" (e.g., @@@ Eng: Option A)
+3. Provide the EXACT correct option text starting with "@@" (e.g., @@ Eng: Option A)
+4. Use standard LaTeX for Mathematical/Chemistry equations (e.g., $$C_2H_5Cl$$ or \\ce{H2O}).
+5. Do NOT use markdown code blocks (No \`\`\`). Do NOT use JSON.
 
-# Q1. [Question text here]
-#1 [Option A]
-#2 [Option B]
-#3 [Option C]
-#4 [Option D]
-@ [Exact string of correct option]
-@@ [Explanation/Review]
-
-# Q2. [Next Question...]`;
+Output Format Example:
+@ 1. [Question text]
+@@@ [Option A]
+@@@ [Option B]
+@@@ [Option C]
+@@@ [Option D]
+@@ [Correct Option Text]`;
 
     navigator.clipboard.writeText(promptText);
-    alert(`Strict Dynamic Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
+    alert(`Prospectus Format Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
   };
 
   const handleGenerateTest = async () => {
@@ -254,7 +269,7 @@ CRITICAL RULES FOR AI:
       {imgModal.isOpen && (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4">
           <div className="bg-gray-900 border-2 border-blue-500 rounded-2xl p-6 md:p-10 w-full max-w-2xl shadow-[0_0_40px_rgba(0,0,255,0.4)] flex flex-col items-center">
-            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Adjust Image</h2>
+            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Adjust & Clean Image</h2>
             
             <div className="w-full bg-black rounded-lg overflow-hidden border border-gray-700 flex items-center justify-center p-2 mb-6" style={{ minHeight: '200px' }}>
               <img src={imgModal.src} alt="Preview" style={{ filter: `brightness(${imgSettings.brightness}%) contrast(${imgSettings.contrast}%) grayscale(${imgSettings.grayscale}%)`, maxHeight: '300px' }} className="max-w-full object-contain rounded-md" />
@@ -296,7 +311,6 @@ CRITICAL RULES FOR AI:
 
       <div className="bg-gray-900 border-2 border-gray-700 rounded-3xl p-6 md:p-10 shadow-2xl">
         
-        {/* ================= TAB 1: GENERATE TEST ================= */}
         {activeTab === 'generate' && (
           <div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -352,7 +366,7 @@ CRITICAL RULES FOR AI:
                 onChange={(e) => setNewTest({...newTest, textInput: e.target.value})}
                 onPaste={(e) => handleImagePaste(e, 'new')}
                 className="p-5 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-blue-500 leading-relaxed"
-                placeholder="# Q1. Question..."
+                placeholder="@ 1. Question..."
               ></textarea>
             </div>
             
@@ -410,66 +424,41 @@ CRITICAL RULES FOR AI:
         {/* ================= TAB 3: MANAGE ================= */}
         {activeTab === 'manage' && (
           <div className="grid grid-cols-1 gap-10">
-            
-            {/* 1. PDF Result Generator */}
             <div className="bg-gray-800 border-l-4 border-yellow-500 p-8 rounded-2xl shadow-lg">
               <h3 className="text-3xl font-extrabold text-yellow-400 mb-6">🏆 Result PDF Generator</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
                 <div className="w-full">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class</label>
-                  <select value={resultClass} onChange={(e) => setResultClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
-                    <option value="" disabled>Select Class</option>
-                    {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
-                  </select>
+                  <select value={resultClass} onChange={(e) => setResultClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full"><option value="" disabled>Select Class</option>{classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}</select>
                 </div>
                 <div className="w-full">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test</label>
-                  <select value={resultTest} onChange={(e) => setResultTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
-                    <option value="" disabled>Select Test</option>
-                    {tests.filter(t => t.className === resultClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
-                  </select>
+                  <select value={resultTest} onChange={(e) => setResultTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full"><option value="" disabled>Select Test</option>{tests.filter(t => t.className === resultClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}</select>
                 </div>
                 <button onClick={handleDownloadPDF} className="w-full md:w-auto bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Generate PDF</button>
               </div>
             </div>
 
-            {/* 2. CSV Export */}
             <div className="bg-gray-800 border-l-4 border-blue-500 p-8 rounded-2xl shadow-lg">
               <h3 className="text-3xl font-extrabold text-blue-400 mb-6">📊 Export Student Database</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
                 <div className="w-full md:w-2/3">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class to Export</label>
-                  <select value={csvClass} onChange={(e) => setCsvClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
-                    <option value="All">All Classes</option>
-                    {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
-                  </select>
+                  <select value={csvClass} onChange={(e) => setCsvClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full"><option value="All">All Classes</option>{classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}</select>
                 </div>
                 <button onClick={handleDownloadCSV} className="w-full md:w-1/3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Download CSV</button>
               </div>
             </div>
 
-            {/* 3. Delete Test */}
             <div className="bg-gray-800 border-l-4 border-red-500 p-8 rounded-2xl shadow-lg">
               <h3 className="text-3xl font-extrabold text-red-500 mb-6">🗑️ Permanently Delete Test</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
                 <div className="w-full">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class</label>
-                  <select value={deleteClass} onChange={(e) => setDeleteClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
-                    <option value="" disabled>Select Class</option>
-                    {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
-                  </select>
+                  <select value={deleteClass} onChange={(e) => setDeleteClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full"><option value="" disabled>Select Class</option>{classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}</select>
                 </div>
                 <div className="w-full">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test</label>
-                  <select value={deleteTest} onChange={(e) => setDeleteTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
-                    <option value="" disabled>Select Test</option>
-                    {tests.filter(t => t.className === deleteClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
-                  </select>
+                  <select value={deleteTest} onChange={(e) => setDeleteTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full"><option value="" disabled>Select Test</option>{tests.filter(t => t.className === deleteClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}</select>
                 </div>
                 <button onClick={handleDeleteTest} className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Delete Test</button>
               </div>
             </div>
-
           </div>
         )}
       </div>
