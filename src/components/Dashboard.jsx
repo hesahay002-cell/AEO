@@ -6,16 +6,51 @@ export default function Dashboard({ user, onLogout }) {
   const [availableTests, setAvailableTests] = useState([]);
   const [activeTest, setActiveTest] = useState(null);
   
-  // Test Taking States
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [answers, setAnswers] = useState({});
-  const [questionStatus, setQuestionStatus] = useState({}); // 'unattempted'(blue), 'answered'(green), 'skipped'(red)
+  const [questionStatus, setQuestionStatus] = useState({});
   const [timeLeft, setTimeLeft] = useState(0);
-  const [testStatus, setTestStatus] = useState('dashboard'); // dashboard, taking, submitted, review
+  const [testStatus, setTestStatus] = useState('dashboard');
   const [warnings, setWarnings] = useState(0);
   const [result, setResult] = useState(null);
-  const [language, setLanguage] = useState('english'); // english or hindi
+  const [language, setLanguage] = useState('english');
 
+  // ================= MATHJAX (LATEX) AUTO-INJECTOR =================
+  useEffect(() => {
+    // 1. MathJax Configuration set karna taaki wo $...$ ko samajh sake
+    if (!document.getElementById('mathjax-config')) {
+      const configScript = document.createElement('script');
+      configScript.id = 'mathjax-config';
+      configScript.type = 'text/javascript';
+      configScript.innerHTML = `
+        window.MathJax = {
+          tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']] },
+          startup: { typeset: false }
+        };
+      `;
+      document.head.appendChild(configScript);
+    }
+    // 2. MathJax Library load karna
+    if (!document.getElementById('mathjax-script')) {
+      const script = document.createElement('script');
+      script.id = 'mathjax-script';
+      script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  // Jab bhi question, language ya page badle, tab MathJax ko refresh karo
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise().catch((err) => console.log('MathJax Error:', err));
+      }
+    }, 100); // 100ms delay taaki React pehle HTML render kar le
+    return () => clearTimeout(timer);
+  }, [testStatus, currentQIndex, language, activeTest]);
+
+  // ================= FETCH TESTS =================
   useEffect(() => {
     fetchTests();
   }, [user]);
@@ -59,14 +94,13 @@ export default function Dashboard({ user, onLogout }) {
     }
   }, [timeLeft, answers, questionStatus, currentQIndex, warnings, language, testStatus, activeTest]);
 
-
   // ================= TIMER LOGIC =================
   useEffect(() => {
     let timer;
     if (testStatus === 'taking' && timeLeft > 0) {
       timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
     } else if (testStatus === 'taking' && timeLeft === 0) {
-      handleSubmitTest(); // Auto-submit when time is up
+      handleSubmitTest();
     }
     return () => clearInterval(timer);
   }, [testStatus, timeLeft]);
@@ -88,7 +122,6 @@ export default function Dashboard({ user, onLogout }) {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [testStatus]);
 
-  // Trigger Submit on 3rd Warning
   useEffect(() => {
     if (warnings >= 3 && testStatus === 'taking') {
       alert("🚨 MAXIMUM WARNINGS REACHED! You violated the rules 3 times. Test is automatically submitting.");
@@ -110,7 +143,6 @@ export default function Dashboard({ user, onLogout }) {
     if (timeStatus.status === 'upcoming') return alert("This test has not started yet.");
     if (timeStatus.status === 'expired') return alert("This test has expired.");
     
-    // Check if there is an Auto-Saved session
     const savedSessionStr = localStorage.getItem(`aeo_test_${user.phone || user.uid}`);
     if (savedSessionStr) {
       const savedSession = JSON.parse(savedSessionStr);
@@ -130,7 +162,6 @@ export default function Dashboard({ user, onLogout }) {
       }
     }
 
-    // Launch Fresh Test
     setActiveTest(test);
     setTimeLeft(test.durationMinutes * 60);
     setAnswers({});
@@ -145,7 +176,6 @@ export default function Dashboard({ user, onLogout }) {
     }
   };
 
-  // Smart Parser for English/Hindi Separation
   const parseText = (text) => {
     if (!text) return "";
     if (text.includes("Eng:") && text.includes("Hin:")) {
@@ -180,7 +210,6 @@ export default function Dashboard({ user, onLogout }) {
     setTestStatus('processing');
     if(document.fullscreenElement) document.exitFullscreen().catch(e=>console.log(e));
 
-    // Clear local storage auto-save data
     localStorage.removeItem(`aeo_test_${user.phone || user.uid}`);
 
     let marksObtained = 0;
@@ -306,7 +335,7 @@ export default function Dashboard({ user, onLogout }) {
     return (
       <div className="min-h-screen bg-black w-full text-white flex flex-col font-sans select-none">
         
-        {/* Top Header: Info, Language, Timer, Submit */}
+        {/* Top Header */}
         <div className="bg-gray-900 p-4 border-b-2 border-blue-600 flex flex-wrap justify-between items-center shadow-lg sticky top-0 z-50 gap-4">
           <h2 className="text-xl md:text-2xl font-bold text-blue-400">{activeTest.subject}</h2>
           
@@ -326,11 +355,11 @@ export default function Dashboard({ user, onLogout }) {
           </div>
         </div>
 
-        {/* Question Palette (1, 2, 3...) */}
+        {/* Question Palette */}
         <div className="bg-gray-800 p-4 border-b border-gray-700 flex flex-wrap gap-2 justify-center max-h-40 overflow-y-auto">
           {activeTest.questions.map((_, idx) => {
             const status = questionStatus[idx] || 'unattempted';
-            let btnColor = 'bg-blue-600 border-blue-700'; // Default unattempted
+            let btnColor = 'bg-blue-600 border-blue-700';
             if (status === 'answered') btnColor = 'bg-green-500 border-green-600';
             if (status === 'skipped') btnColor = 'bg-red-500 border-red-600';
             
@@ -349,7 +378,7 @@ export default function Dashboard({ user, onLogout }) {
           })}
         </div>
 
-        {/* Question Area */}
+        {/* Question Area (Updated for Image and Math Rendering) */}
         <div className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full flex flex-col">
           <div className="mb-4 flex justify-between items-end">
             <span className="text-xl md:text-2xl font-bold text-gray-400">Question {currentQIndex + 1} of {activeTest.questions.length}</span>
@@ -357,22 +386,23 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
           <div className="bg-gray-900 p-6 md:p-10 rounded-3xl border-2 border-gray-700 shadow-xl mb-6 flex-1">
-            <h3 className="text-2xl md:text-3xl font-semibold text-yellow-300 mb-8 whitespace-pre-wrap leading-relaxed">
-              {parseText(question.question)}
-            </h3>
+            <div 
+              className="text-2xl md:text-3xl font-semibold text-yellow-300 mb-8 whitespace-pre-wrap leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: parseText(question.question) }}
+            />
 
             <div className="flex flex-col gap-4">
               {question.options.map((opt, idx) => (
                 <button 
                   key={idx} 
                   onClick={() => handleOptionSelect(opt)}
-                  className={`text-left p-5 md:p-6 rounded-2xl text-xl md:text-2xl font-medium border-2 transition-all duration-200
+                  className={`text-left p-5 md:p-6 rounded-2xl text-xl md:text-2xl font-medium border-2 transition-all duration-200 flex
                     ${answers[currentQIndex] === opt 
                       ? 'bg-blue-600 border-blue-400 shadow-[0_0_15px_rgba(37,99,235,0.5)] text-white' 
                       : 'bg-black border-gray-600 text-gray-300 hover:border-gray-400 hover:bg-gray-800'}`}
                 >
                   <span className="font-bold mr-3">{String.fromCharCode(65 + idx)}.</span>
-                  {parseText(opt)}
+                  <span dangerouslySetInnerHTML={{ __html: parseText(opt) }} />
                 </button>
               ))}
             </div>
@@ -380,33 +410,18 @@ export default function Dashboard({ user, onLogout }) {
 
           {/* Bottom Navigation */}
           <div className="flex flex-wrap justify-between items-center bg-gray-900 p-4 rounded-2xl border-2 border-gray-800 gap-4">
-            <button 
-              disabled={currentQIndex === 0} 
-              onClick={() => setCurrentQIndex(prev => prev - 1)}
-              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-xl font-bold text-xl transition-colors"
-            >
+            <button disabled={currentQIndex === 0} onClick={() => setCurrentQIndex(prev => prev - 1)} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-xl font-bold text-xl transition-colors">
               Previous
             </button>
-            
-            <button 
-              onClick={handleSkip}
-              className="px-6 py-3 bg-red-800 hover:bg-red-700 text-white rounded-xl font-bold text-xl transition-colors"
-            >
+            <button onClick={handleSkip} className="px-6 py-3 bg-red-800 hover:bg-red-700 text-white rounded-xl font-bold text-xl transition-colors">
               Skip
             </button>
-
             {currentQIndex < activeTest.questions.length - 1 ? (
-              <button 
-                onClick={() => setCurrentQIndex(prev => prev + 1)}
-                className="px-8 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-xl shadow-[0_0_15px_rgba(0,0,255,0.3)] transition-colors"
-              >
+              <button onClick={() => setCurrentQIndex(prev => prev + 1)} className="px-8 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-xl shadow-[0_0_15px_rgba(0,0,255,0.3)] transition-colors">
                 Next
               </button>
             ) : (
-              <button 
-                onClick={handleSubmitTest}
-                className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xl shadow-[0_0_15px_rgba(0,255,0,0.4)] transition-colors animate-pulse md:hidden"
-              >
+              <button onClick={handleSubmitTest} className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xl shadow-[0_0_15px_rgba(0,255,0,0.4)] transition-colors animate-pulse md:hidden">
                 Submit
               </button>
             )}
@@ -473,7 +488,12 @@ export default function Dashboard({ user, onLogout }) {
 
             return (
               <div key={idx} className={`bg-gray-900 p-6 md:p-8 rounded-3xl border-l-8 shadow-lg ${isCorrect ? 'border-green-500' : isUnanswered ? 'border-gray-500' : 'border-red-500'}`}>
-                <h3 className="text-xl md:text-2xl font-bold text-gray-200 mb-6 whitespace-pre-wrap">Q{idx + 1}. {parseText(q.question)}</h3>
+                
+                {/* HTML & Math enabled Question Title */}
+                <div className="flex text-xl md:text-2xl font-bold text-gray-200 mb-6 whitespace-pre-wrap">
+                   <span className="mr-2">Q{idx + 1}.</span>
+                   <span dangerouslySetInnerHTML={{ __html: parseText(q.question) }} />
+                </div>
                 
                 <div className="flex flex-col gap-3 mb-6">
                   {q.options.map((opt, oIdx) => {
@@ -482,8 +502,9 @@ export default function Dashboard({ user, onLogout }) {
                     else if (opt === studentAns && !isCorrect) optStyle = "bg-red-900 border-red-500 text-red-100";
                     
                     return (
-                      <div key={oIdx} className={`p-4 rounded-xl border-2 text-lg ${optStyle}`}>
-                        {String.fromCharCode(65 + oIdx)}. {parseText(opt)}
+                      <div key={oIdx} className={`p-4 rounded-xl border-2 text-lg flex ${optStyle}`}>
+                        <span className="font-bold mr-3">{String.fromCharCode(65 + oIdx)}.</span>
+                        <span dangerouslySetInnerHTML={{ __html: parseText(opt) }} />
                       </div>
                     );
                   })}
@@ -492,7 +513,7 @@ export default function Dashboard({ user, onLogout }) {
                 {q.review && (
                   <div className="mt-4 p-5 bg-blue-900/30 border border-blue-800 rounded-xl">
                     <p className="text-blue-300 font-bold mb-2">Explanation (व्याख्या):</p>
-                    <p className="text-gray-300 text-lg whitespace-pre-wrap leading-relaxed">{parseText(q.review)}</p>
+                    <div className="text-gray-300 text-lg whitespace-pre-wrap leading-relaxed" dangerouslySetInnerHTML={{ __html: parseText(q.review) }} />
                   </div>
                 )}
               </div>
