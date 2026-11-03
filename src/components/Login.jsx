@@ -19,26 +19,6 @@ export default function Login({ onLogin, onAdminLogin }) {
 
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
     const url = `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`;
-    const payload = {
-      messaging_product: "whatsapp",
-      to: `91${phoneNumber}`,
-      type: "template",
-      template: {
-        name: "aeo_login_otp",
-        language: { code: "en_US" },
-        components: [
-          {
-            type: "body",
-            parameters: [
-              {
-                type: "text",
-                text: otpCode
-              }
-            ]
-          }
-        ]
-      }
-    };
 
     try {
       const response = await fetch(url, {
@@ -47,7 +27,16 @@ export default function Login({ onLogin, onAdminLogin }) {
           'Authorization': `Bearer ${META_TOKEN}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: `91${phoneNumber}`,
+          type: "text",
+          text: {
+            preview_url: false,
+            body: `Safal Academy Live - AEO Portal\nAapka login OTP hai: *${otpCode}*\nKripya ise kisi ke sath share na karein.`
+          }
+        })
       });
       const data = await response.json();
       if (data.error) {
@@ -114,21 +103,22 @@ export default function Login({ onLogin, onAdminLogin }) {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4 font-sans relative overflow-hidden">
-      {/* 3D Background Elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-900 rounded-full blur-[120px] opacity-40"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-green-900 rounded-full blur-[120px] opacity-30"></div>
+    <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4 font-sans relative overflow-hidden select-none">
+      {/* 3D Glowing Background Orbs (Blue, Green, Red, Blue) */}
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600 rounded-full blur-[160px] opacity-30 animate-pulse"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-green-600 rounded-full blur-[160px] opacity-25"></div>
+      <div className="absolute top-[30%] right-[20%] w-[350px] h-[350px] bg-red-600 rounded-full blur-[150px] opacity-20"></div>
 
       {/* 3D Glassmorphism Card */}
-      <div className="w-full max-w-lg bg-gray-900/80 backdrop-blur-xl border-t border-l border-white/10 p-8 rounded-[2rem] shadow-[20px_20px_60px_#000000,-20px_-20px_60px_#111827] z-10 relative">
+      <div className="w-full max-w-lg bg-gray-950/80 backdrop-blur-2xl border-2 border-gray-800 p-8 md:p-10 rounded-[2.5rem] shadow-[0_0_50px_rgba(37,99,235,0.25),inset_0_0_20px_rgba(255,255,255,0.05)] z-10 relative">
         
-        <div className="text-center mb-10">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400 mb-2 drop-shadow-lg">AEO PORTAL</h1>
-          <p className="text-gray-400 font-bold tracking-widest text-sm">ACADEMIC EXCELLENCE OLYMPIAD</p>
+        <div className="text-center mb-8">
+          <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-green-400 to-red-400 mb-2 drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)] tracking-wider">AEO PORTAL</h1>
+          <p className="text-gray-400 font-bold tracking-[0.2em] text-xs uppercase">Academic Excellence Olympiad</p>
         </div>
 
         {error && (
-          <div className="bg-red-900/40 border-l-4 border-red-500 text-red-200 p-4 rounded-r-xl mb-6 text-sm font-semibold shadow-inner">
+          <div className="bg-red-950/80 border-l-4 border-red-500 text-red-200 p-4 rounded-xl mb-6 text-sm font-semibold shadow-lg">
             {error}
           </div>
         )}
@@ -136,50 +126,50 @@ export default function Login({ onLogin, onAdminLogin }) {
         {step === 1 ? (
           <form onSubmit={handleSendOtp} className="flex flex-col gap-5">
             <div className="relative">
-                <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-1 block">Student Name</label>
-                <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Rahul Kumar" className="w-full bg-gray-950/50 border-t-2 border-l-2 border-black border-b-2 border-r-2 border-gray-700 text-white text-lg p-4 rounded-2xl outline-none focus:border-blue-500 shadow-inner transition-colors" />
+                <label className="text-xs font-extrabold text-blue-400 uppercase ml-2 mb-1 block tracking-wider">Student Name</label>
+                <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Enter your full name" className="w-full bg-black/60 border-2 border-gray-800 text-white text-lg p-4 rounded-2xl outline-none focus:border-blue-500 focus:shadow-[0_0_15px_rgba(37,99,235,0.4)] shadow-inner transition-all font-medium placeholder-gray-600" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="relative">
-                    <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-1 block">Class</label>
-                    <select value={formData.className} onChange={(e) => setFormData({...formData, className: e.target.value})} className="w-full bg-gray-950/50 border-t-2 border-l-2 border-black border-b-2 border-r-2 border-gray-700 text-white text-lg p-4 rounded-2xl outline-none focus:border-blue-500 shadow-inner appearance-none cursor-pointer">
-                        <option value="" disabled>Select</option>
-                        {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                    <label className="text-xs font-extrabold text-green-400 uppercase ml-2 mb-1 block tracking-wider">Class / Target</label>
+                    <select value={formData.className} onChange={(e) => setFormData({...formData, className: e.target.value})} className="w-full bg-black/60 border-2 border-gray-800 text-white text-lg p-4 rounded-2xl outline-none focus:border-green-500 focus:shadow-[0_0_15px_rgba(34,197,94,0.4)] shadow-inner appearance-none cursor-pointer">
+                        <option value="" disabled>Select Class</option>
+                        {classOptions.map(cls => <option key={cls} value={cls} className="bg-gray-900 text-white">{cls}</option>)}
                     </select>
                 </div>
 
                 <div className="relative">
-                    <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-1 block">School</label>
-                    <input type="text" value={formData.school} onChange={(e) => setFormData({...formData, school: e.target.value})} placeholder="DAV" className="w-full bg-gray-950/50 border-t-2 border-l-2 border-black border-b-2 border-r-2 border-gray-700 text-white text-lg p-4 rounded-2xl outline-none focus:border-blue-500 shadow-inner transition-colors" />
+                    <label className="text-xs font-extrabold text-yellow-400 uppercase ml-2 mb-1 block tracking-wider">School / Institute</label>
+                    <input type="text" value={formData.school} onChange={(e) => setFormData({...formData, school: e.target.value})} placeholder="School Name" className="w-full bg-black/60 border-2 border-gray-800 text-white text-lg p-4 rounded-2xl outline-none focus:border-yellow-500 focus:shadow-[0_0_15px_rgba(234,179,8,0.4)] shadow-inner transition-all font-medium placeholder-gray-600" />
                 </div>
             </div>
 
-            <div className="relative mt-2">
-              <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-1 block">WhatsApp Number</label>
-              <div className="flex bg-gray-950/50 border-t-2 border-l-2 border-black border-b-2 border-r-2 border-gray-700 rounded-2xl overflow-hidden focus-within:border-green-500 shadow-inner transition-colors">
-                <span className="flex items-center px-4 bg-black/40 text-gray-400 font-bold border-r border-gray-800">+91</span>
-                <input type="tel" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value.replace(/[^0-9]/g, '').slice(0,10)})} placeholder="9876543210" className="w-full bg-transparent text-white text-xl p-4 outline-none font-bold placeholder-gray-700" autoComplete="off" />
+            <div className="relative mt-1">
+              <label className="text-xs font-extrabold text-red-400 uppercase ml-2 mb-1 block tracking-wider">WhatsApp Number (For OTP)</label>
+              <div className="flex bg-black/60 border-2 border-gray-800 rounded-2xl overflow-hidden focus-within:border-red-500 focus-within:shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all shadow-inner">
+                <span className="flex items-center px-4 bg-gray-900 text-gray-400 font-bold border-r border-gray-800">+91</span>
+                <input type="tel" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value.replace(/[^0-9]/g, '').slice(0,10)})} placeholder="9876543210" className="w-full bg-transparent text-white text-xl p-4 outline-none font-bold placeholder-gray-700 tracking-wider" autoComplete="off" />
               </div>
             </div>
             
-            <button type="submit" disabled={loading} className="w-full mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xl py-4 rounded-2xl shadow-[0_10px_20px_rgba(37,99,235,0.3)] transform hover:-translate-y-1 transition-all disabled:opacity-50 disabled:transform-none">
-              {loading ? 'Sending...' : 'Get OTP on WhatsApp'}
+            <button type="submit" disabled={loading} className="w-full mt-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-green-600 hover:from-blue-500 hover:to-green-500 text-white font-black text-xl py-4 rounded-2xl shadow-[0_10px_25px_rgba(37,99,235,0.4)] transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none tracking-wide">
+              {loading ? 'Sending OTP...' : 'Get OTP on WhatsApp'}
             </button>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="flex flex-col gap-6">
-            <div className="text-center mb-4 bg-gray-950/50 p-4 rounded-2xl border border-gray-800 shadow-inner">
+            <div className="text-center mb-2 bg-black/60 p-5 rounded-2xl border border-gray-800 shadow-inner">
               <p className="text-green-400 font-bold text-lg">OTP Sent to +91 {formData.phone}</p>
-              <button type="button" onClick={() => setStep(1)} className="text-blue-400 text-sm font-bold underline hover:text-blue-300 mt-2">Edit Details</button>
+              <button type="button" onClick={() => setStep(1)} className="text-blue-400 text-sm font-bold underline hover:text-blue-300 mt-2">Edit Details / Number</button>
             </div>
             
             <div className="relative">
-              <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-1 block text-center">Enter 4-Digit OTP</label>
-              <input type="text" value={otp} onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0,4))} placeholder="••••" className="w-full bg-gray-950/50 border-t-2 border-l-2 border-black border-b-2 border-r-2 border-gray-700 text-white text-center text-4xl tracking-[1em] p-4 rounded-2xl outline-none focus:border-green-500 shadow-inner font-black" autoComplete="off" />
+              <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-2 block text-center tracking-widest">Enter 4-Digit WhatsApp OTP</label>
+              <input type="text" value={otp} onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0,4))} placeholder="••••" className="w-full bg-black/60 border-2 border-gray-800 text-white text-center text-4xl tracking-[1em] p-4 rounded-2xl outline-none focus:border-green-500 focus:shadow-[0_0_20px_rgba(34,197,94,0.4)] shadow-inner font-black" autoComplete="off" />
             </div>
             
-            <button type="submit" disabled={loading} className="w-full mt-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-extrabold text-xl py-4 rounded-2xl shadow-[0_10px_20px_rgba(16,185,129,0.3)] transform hover:-translate-y-1 transition-all disabled:opacity-50 disabled:transform-none">
+            <button type="submit" disabled={loading} className="w-full mt-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-black text-xl py-4 rounded-2xl shadow-[0_10px_25px_rgba(16,185,129,0.4)] transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none tracking-wide">
               {loading ? 'Verifying...' : 'Verify & Enter Exam'}
             </button>
           </form>
