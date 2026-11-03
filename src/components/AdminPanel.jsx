@@ -43,7 +43,7 @@ export default function AdminPanel({ onLogout }) {
     } catch(e) { console.error(e); }
   };
 
-  // ================= IMAGE COMPRESSOR (FIXES FIREBASE 1MB CRASH) =================
+  // ================= CRASH-PROOF DIRECT HTML IMAGE INSERT =================
   const handleImagePaste = (e, tab) => {
     const items = (e.clipboardData || e.originalEvent?.clipboardData || window.clipboardData).items;
     if (!items) return;
@@ -76,7 +76,7 @@ export default function AdminPanel({ onLogout }) {
     const cvs = document.createElement('canvas');
     const ctx = cvs.getContext('2d');
     
-    // Auto-Resize to prevent Firebase Limit Crash
+    // Auto-Resize
     let width = currentImgRef.current.width;
     let height = currentImgRef.current.height;
     const MAX_WIDTH = 800;
@@ -89,25 +89,25 @@ export default function AdminPanel({ onLogout }) {
     ctx.filter = `brightness(${imgSettings.brightness}%) contrast(${imgSettings.contrast}%) grayscale(${imgSettings.grayscale}%)`;
     ctx.drawImage(currentImgRef.current, 0, 0, width, height);
     
-    // High Compression JPEG
     const finalBase64 = cvs.toDataURL('image/jpeg', 0.75); 
-    const imgMarkdown = `\n![image](${finalBase64})\n`;
+    const imgHTML = `\n<div style="text-align:center; margin:15px 0;"><img src="${finalBase64}" style="max-width:100%; border-radius:8px; border:2px solid #374151;" /></div>\n`;
     
     if (imgModal.targetTab === 'new') {
-        setNewTest(prev => ({ ...prev, textInput: prev.textInput.substring(0, imgModal.start) + imgMarkdown + prev.textInput.substring(imgModal.end) }));
+        setNewTest(prev => ({ ...prev, textInput: prev.textInput.substring(0, imgModal.start) + imgHTML + prev.textInput.substring(imgModal.end) }));
     } else {
-        setAppendText(prev => prev.substring(0, imgModal.start) + imgMarkdown + prev.substring(imgModal.end));
+        setAppendText(prev => prev.substring(0, imgModal.start) + imgHTML + prev.substring(imgModal.end));
     }
     setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   };
 
-  // ================= UNIVERSAL HYBRID PARSER =================
+  // ================= UNIVERSAL HYBRID PARSER (SAFE MODE) =================
   const parseCustomFormat = (rawText) => {
     const lines = String(rawText).split('\n');
     const questions = [];
     let currentQ = null;
     let currentMode = '';
     let optCount = 0;
+    let preamble = ''; 
 
     lines.forEach(line => {
       let trimmed = line.trim();
@@ -127,12 +127,14 @@ export default function AdminPanel({ onLogout }) {
       } else if (trimmed.startsWith('@')) {
           if (currentQ) questions.push(currentQ);
           let cleanQ = trimmed.substring(1).trim().replace(/^\d+[\.\:\-]?\s*/, '');
+          if (preamble) { cleanQ = preamble + "\n<br/>" + cleanQ; preamble = ''; } 
           currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
           optCount = 0; currentMode = 'q';
       } 
       else if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
         if (currentQ) questions.push(currentQ);
         let cleanQ = trimmed.substring(1).trim().replace(/^(Q(uestion)?\s*\d+[\.\:\-]?\s*)/i, '');
+        if (preamble) { cleanQ = preamble + "\n<br/>" + cleanQ; preamble = ''; } 
         currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
         optCount = 0; currentMode = 'q';
       } else if (trimmed.startsWith('#1')) {
@@ -145,6 +147,8 @@ export default function AdminPanel({ onLogout }) {
         if(!currentQ) return; currentQ.o4 = trimmed.substring(2).trim(); currentMode = 'o4';
       } else if (currentQ) {
         currentQ[currentMode] += '\n' + trimmed;
+      } else {
+        preamble += '\n' + trimmed; 
       }
     });
     
@@ -265,11 +269,10 @@ Output Format Example:
   return (
     <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans relative">
       
-      {/* IMAGE MODAL UI */}
       {imgModal.isOpen && (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4">
           <div className="bg-gray-900 border-2 border-blue-500 rounded-2xl p-6 md:p-10 w-full max-w-2xl shadow-[0_0_40px_rgba(0,0,255,0.4)] flex flex-col items-center">
-            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Adjust & Clean Image</h2>
+            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Adjust Image</h2>
             
             <div className="w-full bg-black rounded-lg overflow-hidden border border-gray-700 flex items-center justify-center p-2 mb-6" style={{ minHeight: '200px' }}>
               <img src={imgModal.src} alt="Preview" style={{ filter: `brightness(${imgSettings.brightness}%) contrast(${imgSettings.contrast}%) grayscale(${imgSettings.grayscale}%)`, maxHeight: '300px' }} className="max-w-full object-contain rounded-md" />
