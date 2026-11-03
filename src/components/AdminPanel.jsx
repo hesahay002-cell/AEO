@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, where, updateDoc } from 'firebase/firestore';
 
@@ -23,8 +23,15 @@ export default function AdminPanel({ onLogout }) {
   const [appendTest, setAppendTest] = useState('');
   const [appendText, setAppendText] = useState('');
 
-  const fileInputNewRef = useRef(null);
-  const fileInputAppendRef = useRef(null);
+  // ================= IMAGE EDITOR MODAL STATE =================
+  const [imageModal, setImageModal] = useState({
+    isOpen: false,
+    src: '',
+    targetTab: '', // 'new' or 'append'
+    start: 0,
+    end: 0,
+    brightness: 100
+  });
 
   useEffect(() => {
     fetchTests();
@@ -43,8 +50,8 @@ export default function AdminPanel({ onLogout }) {
     setStudents(studentsData);
   };
 
-  // ================= 100% FIXED IMAGE PASTE (WITH CURSOR LOCK) =================
-  const handleImagePaste = (e, isAppendTab = false) => {
+  // ================= 1. CAPTURE MOUSE PASTE & OPEN MODAL =================
+  const handleImagePaste = (e, tab) => {
     const items = (e.clipboardData || window.clipboardData).items;
     if (!items) return;
 
@@ -53,24 +60,20 @@ export default function AdminPanel({ onLogout }) {
         e.preventDefault(); 
         const file = items[i].getAsFile();
         
-        // Lock cursor position BEFORE async reading starts
         const textarea = e.target;
         const start = textarea.selectionStart !== undefined ? textarea.selectionStart : textarea.value.length;
         const end = textarea.selectionEnd !== undefined ? textarea.selectionEnd : textarea.value.length;
 
         const reader = new FileReader();
         reader.onload = (event) => {
-          const base64Data = event.target.result;
-          const imgTag = `\n<img src="${base64Data}" alt="question-img" style="max-width:100%; border-radius:8px; margin:10px 0; border: 1px solid #4b5563;" />\n`;
-          
-          if (isAppendTab) {
-            setAppendText(prev => prev.substring(0, start) + imgTag + prev.substring(end));
-          } else {
-            setNewTest(prev => ({ 
-              ...prev, 
-              textInput: prev.textInput.substring(0, start) + imgTag + prev.textInput.substring(end) 
-            }));
-          }
+          setImageModal({
+            isOpen: true,
+            src: event.target.result,
+            targetTab: tab,
+            start: start,
+            end: end,
+            brightness: 100
+          });
         };
         reader.readAsDataURL(file);
         break; 
@@ -78,23 +81,37 @@ export default function AdminPanel({ onLogout }) {
     }
   };
 
-  // ================= FALLBACK MANUAL IMAGE UPLOAD =================
-  const handleManualImageUpload = (e, isAppendTab = false) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  // ================= 2. PROCESS IMAGE & INSERT (HTML5 CANVAS) =================
+  const handleInsertProcessedImage = () => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
     
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64Data = event.target.result;
-      const imgTag = `\n<img src="${base64Data}" alt="question-img" style="max-width:100%; border-radius:8px; margin:10px 0; border: 1px solid #4b5563;" />\n`;
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
       
-      if (isAppendTab) {
-        setAppendText(prev => prev + imgTag);
+      // Apply Brightness Filter
+      ctx.filter = `brightness(${imageModal.brightness}%)`;
+      ctx.drawImage(img, 0, 0);
+      
+      // Convert to compressed JPEG Base64 to save database space
+      const processedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+      const imgTag = `\n<img src="${processedBase64}" alt="question-img" style="max-width:100%; border-radius:8px; margin:10px 0; border: 1px solid #4b5563;" />\n`;
+      
+      if (imageModal.targetTab === 'new') {
+        setNewTest(prev => ({ 
+          ...prev, 
+          textInput: prev.textInput.substring(0, imageModal.start) + imgTag + prev.textInput.substring(imageModal.end) 
+        }));
       } else {
-        setNewTest(prev => ({ ...prev, textInput: prev.textInput + imgTag }));
+        setAppendText(prev => prev.substring(0, imageModal.start) + imgTag + prev.substring(imageModal.end));
       }
+      
+      // Close Modal
+      setImageModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0, brightness: 100 });
     };
-    reader.readAsDataURL(file);
+    img.src = imageModal.src;
   };
 
   // ================= SUPER CLEANER PARSER =================
@@ -144,6 +161,7 @@ export default function AdminPanel({ onLogout }) {
     }));
   };
 
+  // ================= STRICT PROMPT WITH GAPING =================
   const copyPrompt = () => {
     let langInstruction = "in BOTH English and Hindi (e.g., Eng: [Text]\\nHin: [Text])";
     if (promptLang === 'english') langInstruction = "in ENGLISH ONLY";
@@ -153,9 +171,9 @@ export default function AdminPanel({ onLogout }) {
     
 CRITICAL RULES FOR AI:
 1. Start EVERY single question with "# Q" followed by the number. (e.g., # Q1. Eng: ...)
-2. Do NOT use JSON or markdown code blocks (No \`\`\`). Do NOT use backslashes to escape characters.
+2. Do NOT use JSON or markdown code blocks. Do NOT use backslashes (\\) to escape characters.
 3. Use standard LaTeX format for Mathematical equations and Chemistry formulas (e.g., $C_2H_5Cl$).
-4. LEAVE ONE BLANK LINE between the explanation (@@) of one question and the start (# Q) of the next question.
+4. GAPING RULE: You MUST leave exactly ONE BLANK LINE between the explanation (@@) of the previous question and the start (# Q) of the next question. Do NOT cluster questions together.
 5. Output STRICTLY in this exact text format and do not add any conversational text:
 
 # Q1. [Question text here]
@@ -252,24 +270,15 @@ CRITICAL RULES FOR AI:
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap');
             body { font-family: 'Poppins', sans-serif; padding: 40px; color: #111; }
-            .header { text-align: center; border-bottom: 4px solid #d32f2f; padding-bottom: 20px; margin-bottom: 30px; }
-            .header h1 { color: #d32f2f; margin: 0; font-size: 36px; text-transform: uppercase; }
-            .info { text-align: center; font-size: 18px; margin-bottom: 30px; color: #555; font-weight: 600; }
             table { width: 100%; border-collapse: collapse; }
-            th { background-color: #0f172a; color: #facc15; padding: 15px; font-size: 18px; text-transform: uppercase; border: 1px solid #0f172a; }
-            td { padding: 12px 15px; text-align: center; border: 1px solid #ddd; font-size: 16px; }
-            tr:nth-child(even) { background-color: #f8fafc; }
-            tr:nth-child(1) td { background-color: #fef08a; font-weight: bold; }
-            tr:nth-child(2) td { background-color: #e2e8f0; font-weight: bold; }
-            tr:nth-child(3) td { background-color: #fed7aa; font-weight: bold; }
-            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } button { display: none; } }
+            th { background-color: #0f172a; color: #facc15; padding: 15px; border: 1px solid #0f172a; }
+            td { padding: 12px 15px; text-align: center; border: 1px solid #ddd; }
           </style>
         </head>
         <body>
-          <div class="header"><h1>Academic Excellence Olympiad</h1><h2>Official Result Declaration</h2></div>
-          <div class="info"><p>Class: ${selectedTestData?.className} | Subject: ${selectedTestData?.subject}</p></div>
-          <table><thead><tr><th>Rank</th><th>Student Name</th><th>School Name</th><th>Marks Obtained</th><th>Percentage</th></tr></thead><tbody>${tableRows}</tbody></table>
-          <div style="text-align:center; margin-top: 40px;"><button onclick="window.print()" style="padding: 15px 30px; font-size: 18px; background-color: #d32f2f; color: white; border: none; cursor: pointer; border-radius: 8px;">Print / Save as PDF</button></div>
+          <div style="text-align:center;"><h1>AEO Results</h1><h2>${testName}</h2></div>
+          <table><thead><tr><th>Rank</th><th>Name</th><th>School</th><th>Marks</th><th>%</th></tr></thead><tbody>${tableRows}</tbody></table>
+          <div style="text-align:center; margin-top: 20px;"><button onclick="window.print()">Print PDF</button></div>
         </body>
       </html>
     `);
@@ -300,56 +309,97 @@ CRITICAL RULES FOR AI:
   };
 
   return (
-    <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans">
+    <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans relative">
+      
+      {/* ================= IMAGE EDITOR MODAL (POPUP) ================= */}
+      {imageModal.isOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border-2 border-blue-500 rounded-2xl p-6 md:p-10 w-full max-w-2xl shadow-[0_0_40px_rgba(0,0,255,0.4)] flex flex-col items-center">
+            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Edit Image Before Paste</h2>
+            
+            <div className="w-full bg-black rounded-lg overflow-hidden border border-gray-700 flex items-center justify-center p-2 mb-6" style={{ minHeight: '200px' }}>
+              <img 
+                src={imageModal.src} 
+                alt="Preview" 
+                style={{ filter: `brightness(${imageModal.brightness}%)`, maxHeight: '350px' }} 
+                className="max-w-full object-contain rounded-md"
+              />
+            </div>
+
+            <div className="w-full mb-8">
+              <label className="text-gray-300 font-bold mb-2 flex justify-between">
+                <span>Brightness</span>
+                <span className="text-blue-400">{imageModal.brightness}%</span>
+              </label>
+              <input 
+                type="range" 
+                min="30" 
+                max="200" 
+                value={imageModal.brightness} 
+                onChange={(e) => setImageModal({...imageModal, brightness: e.target.value})} 
+                className="w-full cursor-pointer"
+              />
+            </div>
+
+            <div className="flex gap-4 w-full">
+              <button onClick={() => setImageModal({...imageModal, isOpen: false})} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl text-lg transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleInsertProcessedImage} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg shadow-[0_0_15px_rgba(34,197,94,0.4)] transition-colors">
+                ✅ OK (Insert Image)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-gray-800 pb-4 gap-4">
         <h1 className="text-3xl md:text-5xl font-extrabold text-red-500 tracking-wider">AEO Admin Panel</h1>
         <button onClick={onLogout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg w-full md:w-auto">Logout</button>
       </div>
 
       <div className="flex flex-wrap gap-4 mb-8">
-        <button onClick={() => setActiveTab('generate')} className={`px-6 py-4 text-lg font-bold rounded-xl transition-colors w-full md:w-auto ${activeTab === 'generate' ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(0,0,255,0.5)]' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>1. Generate New Test</button>
-        <button onClick={() => setActiveTab('append')} className={`px-6 py-4 text-lg font-bold rounded-xl transition-colors w-full md:w-auto ${activeTab === 'append' ? 'bg-green-600 text-white shadow-[0_0_15px_rgba(34,197,94,0.5)]' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>2. Add Questions (Append)</button>
-        <button onClick={() => setActiveTab('manage')} className={`px-6 py-4 text-lg font-bold rounded-xl transition-colors w-full md:w-auto ${activeTab === 'manage' ? 'bg-yellow-600 text-white shadow-[0_0_15px_rgba(202,138,4,0.5)]' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>3. Manage & Analytics</button>
+        <button onClick={() => setActiveTab('generate')} className={`px-6 py-4 text-lg font-bold rounded-xl transition-colors w-full md:w-auto ${activeTab === 'generate' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'}`}>1. Generate New Test</button>
+        <button onClick={() => setActiveTab('append')} className={`px-6 py-4 text-lg font-bold rounded-xl transition-colors w-full md:w-auto ${activeTab === 'append' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400'}`}>2. Add Questions</button>
+        <button onClick={() => setActiveTab('manage')} className={`px-6 py-4 text-lg font-bold rounded-xl transition-colors w-full md:w-auto ${activeTab === 'manage' ? 'bg-yellow-600 text-white' : 'bg-gray-800 text-gray-400'}`}>3. Manage & Analytics</button>
       </div>
 
       <div className="bg-gray-900 border-2 border-gray-700 rounded-3xl p-6 md:p-10 shadow-2xl">
         
-        {/* ================= TAB 1: GENERATE TEST ================= */}
+        {/* ================= TAB 1 ================= */}
         {activeTab === 'generate' && (
           <div>
-            <h2 className="text-3xl text-blue-400 font-bold mb-8 border-b border-gray-700 pb-4">Create New Test</h2>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="w-full">
                 <label className="text-gray-300 text-sm font-bold mb-2 block">Class / Category</label>
-                <select value={newTest.class} onChange={(e) => setNewTest({...newTest, class: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                <select value={newTest.class} onChange={(e) => setNewTest({...newTest, class: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
                   <option value="" disabled>Select Category</option>
                   {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
                 </select>
               </div>
               <div className="w-full">
                 <label className="text-gray-300 text-sm font-bold mb-2 block">Subject Name</label>
-                <input type="text" placeholder="e.g. Physics" value={newTest.subject} onChange={(e) => setNewTest({...newTest, subject: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
+                <input type="text" value={newTest.subject} onChange={(e) => setNewTest({...newTest, subject: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
               </div>
               <div className="w-full">
                 <label className="text-gray-300 text-sm font-bold mb-2 block">Marks per Question</label>
-                <input type="number" placeholder="e.g. 4" value={newTest.marks} onChange={(e) => setNewTest({...newTest, marks: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
+                <input type="number" value={newTest.marks} onChange={(e) => setNewTest({...newTest, marks: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
               </div>
               <div className="w-full">
                 <label className="text-gray-300 text-sm font-bold mb-2 block">Negative Marking</label>
-                <input type="number" placeholder="e.g. 1 (Enter 0 for none)" value={newTest.negativeMarks} onChange={(e) => setNewTest({...newTest, negativeMarks: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
+                <input type="number" value={newTest.negativeMarks} onChange={(e) => setNewTest({...newTest, negativeMarks: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
               </div>
               <div className="w-full md:col-span-2">
                 <label className="text-gray-300 text-sm font-bold mb-2 block">Duration (Minutes)</label>
-                <input type="number" placeholder="e.g. 60" value={newTest.duration} onChange={(e) => setNewTest({...newTest, duration: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
+                <input type="number" value={newTest.duration} onChange={(e) => setNewTest({...newTest, duration: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
               </div>
               <div className="w-full">
                 <label className="text-gray-300 text-sm font-bold mb-2 block">Test Start Time</label>
-                <input type="datetime-local" style={{ colorScheme: 'dark' }} value={newTest.startTime} onChange={(e) => setNewTest({...newTest, startTime: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer" />
+                <input type="datetime-local" style={{ colorScheme: 'dark' }} value={newTest.startTime} onChange={(e) => setNewTest({...newTest, startTime: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
               </div>
               <div className="w-full">
                 <label className="text-gray-300 text-sm font-bold mb-2 block">Test End Time</label>
-                <input type="datetime-local" style={{ colorScheme: 'dark' }} value={newTest.endTime} onChange={(e) => setNewTest({...newTest, endTime: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer" />
+                <input type="datetime-local" style={{ colorScheme: 'dark' }} value={newTest.endTime} onChange={(e) => setNewTest({...newTest, endTime: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full" />
               </div>
             </div>
 
@@ -363,18 +413,16 @@ CRITICAL RULES FOR AI:
             </div>
 
             <div className="w-full mb-8">
-              <label className="text-green-400 text-sm font-bold mb-2 flex justify-between items-center">
-                <span>2. Paste Custom Text Format here (Ctrl+V works for Text & Screenshots!)</span>
-                <input type="file" accept="image/*" ref={fileInputNewRef} className="hidden" onChange={(e) => handleManualImageUpload(e, false)} />
-                <button onClick={() => fileInputNewRef.current.click()} className="bg-gray-700 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600">📤 Upload Image</button>
+              <label className="text-green-400 text-sm font-bold mb-2 block">
+                2. Paste Custom Text Format here (Right-Click & Paste / Ctrl+V to open Image Editor!)
               </label>
               <textarea 
                 rows="10" 
-                placeholder="# Q1. Question\n#1 Option A\n#2 Option B\n#3 Option C\n#4 Option D\n@ Correct Answer\n@@ Explanation\n\n(Tip: You can directly paste screenshots inside this box!)" 
                 value={newTest.textInput} 
                 onChange={(e) => setNewTest({...newTest, textInput: e.target.value})}
-                onPaste={(e) => handleImagePaste(e, false)}
+                onPaste={(e) => handleImagePaste(e, 'new')}
                 className="p-5 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-blue-500 leading-relaxed"
+                placeholder="# Q1. Question..."
               ></textarea>
             </div>
             
@@ -387,11 +435,9 @@ CRITICAL RULES FOR AI:
           </div>
         )}
 
-        {/* ================= TAB 2: APPEND QUESTIONS ================= */}
+        {/* ================= TAB 2 ================= */}
         {activeTab === 'append' && (
           <div>
-            <h2 className="text-3xl text-green-400 font-bold mb-6 border-b border-gray-700 pb-4">➕ Add More Questions</h2>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div className="w-full">
                 <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class</label>
@@ -404,57 +450,52 @@ CRITICAL RULES FOR AI:
                 <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test to Expand</label>
                 <select value={appendTest} onChange={(e) => setAppendTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
                   <option value="" disabled>Select Test</option>
-                  {tests.filter(t => t.className === appendClass).map(t => <option key={t.id} value={t.id}>{t.subject} (Total Qs: {t.questions?.length || 0})</option>)}
+                  {tests.filter(t => t.className === appendClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
                 </select>
               </div>
             </div>
 
             <div className="w-full mb-6">
-              <label className="text-green-400 text-sm font-bold mb-2 flex justify-between items-center">
-                <span>Paste Custom Text Format here (Ctrl+V works for Screenshots!)</span>
-                <input type="file" accept="image/*" ref={fileInputAppendRef} className="hidden" onChange={(e) => handleManualImageUpload(e, true)} />
-                <button onClick={() => fileInputAppendRef.current.click()} className="bg-gray-700 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-600">📤 Upload Image</button>
+              <label className="text-green-400 text-sm font-bold mb-2 block">
+                Paste Custom Text Format here (Right-Click & Paste / Ctrl+V to open Image Editor!)
               </label>
               <textarea 
                 rows="8" 
-                placeholder="# Q1. Question..." 
                 value={appendText} 
                 onChange={(e) => setAppendText(e.target.value)} 
-                onPaste={(e) => handleImagePaste(e, true)}
+                onPaste={(e) => handleImagePaste(e, 'append')}
                 className="p-5 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-green-500"
               ></textarea>
             </div>
 
             <div className="flex justify-between items-center">
               <button onClick={copyPrompt} className="text-blue-400 underline hover:text-blue-300 text-lg font-bold">Copy Prompt</button>
-              <button onClick={handleAddMoreQuestions} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl shadow-[0_0_15px_rgba(34,197,94,0.4)]">
+              <button onClick={handleAddMoreQuestions} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl">
                 {loading ? 'Adding...' : 'Add Questions to Test'}
               </button>
             </div>
           </div>
         )}
 
-        {/* ================= TAB 3: MANAGE & DOWNLOAD ================= */}
+        {/* ================= TAB 3 ================= */}
         {activeTab === 'manage' && (
           <div className="grid grid-cols-1 gap-10">
             <div className="bg-gray-800 border-l-4 border-yellow-500 p-8 rounded-2xl shadow-lg">
               <h3 className="text-3xl font-extrabold text-yellow-400 mb-6">🏆 Result PDF Generator</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
                 <div className="w-full">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class</label>
-                  <select value={resultClass} onChange={(e) => setResultClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                  <select value={resultClass} onChange={(e) => setResultClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
                     <option value="" disabled>Select Class</option>
                     {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
                   </select>
                 </div>
                 <div className="w-full">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test</label>
-                  <select value={resultTest} onChange={(e) => setResultTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                  <select value={resultTest} onChange={(e) => setResultTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
                     <option value="" disabled>Select Test</option>
                     {tests.filter(t => t.className === resultClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
                   </select>
                 </div>
-                <button onClick={handleDownloadPDF} className="w-full md:w-auto bg-yellow-600 hover:bg-yellow-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Generate PDF</button>
+                <button onClick={handleDownloadPDF} className="w-full md:w-auto bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Generate PDF</button>
               </div>
             </div>
 
@@ -462,13 +503,12 @@ CRITICAL RULES FOR AI:
               <h3 className="text-3xl font-extrabold text-blue-400 mb-6">📊 Export Student Database</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
                 <div className="w-full md:w-2/3">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class to Export</label>
-                  <select value={csvClass} onChange={(e) => setCsvClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                  <select value={csvClass} onChange={(e) => setCsvClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
                     <option value="All">All Classes</option>
                     {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
                   </select>
                 </div>
-                <button onClick={handleDownloadCSV} className="w-full md:w-1/3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Download CSV</button>
+                <button onClick={handleDownloadCSV} className="w-full md:w-1/3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Download CSV</button>
               </div>
             </div>
 
@@ -476,23 +516,20 @@ CRITICAL RULES FOR AI:
               <h3 className="text-3xl font-extrabold text-red-500 mb-6">🗑️ Permanently Delete Test</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
                 <div className="w-full">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class</label>
-                  <select value={deleteClass} onChange={(e) => setDeleteClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                  <select value={deleteClass} onChange={(e) => setDeleteClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
                     <option value="" disabled>Select Class</option>
                     {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
                   </select>
                 </div>
                 <div className="w-full">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test</label>
-                  <select value={deleteTest} onChange={(e) => setDeleteTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                  <select value={deleteTest} onChange={(e) => setDeleteTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
                     <option value="" disabled>Select Test</option>
                     {tests.filter(t => t.className === deleteClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
                   </select>
                 </div>
-                <button onClick={handleDeleteTest} className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Delete Test</button>
+                <button onClick={handleDeleteTest} className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Delete Test</button>
               </div>
             </div>
-
           </div>
         )}
       </div>
