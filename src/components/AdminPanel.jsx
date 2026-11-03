@@ -24,7 +24,6 @@ export default function AdminPanel({ onLogout }) {
   const [appendTest, setAppendTest] = useState('');
   const [appendText, setAppendText] = useState('');
 
-  // IMAGE EDITOR MODAL (From GUESS PAPER PRO)
   const [imgModal, setImgModal] = useState({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   const [imgSettings, setImgSettings] = useState({ brightness: 100, contrast: 100, grayscale: 0 });
   const currentImgRef = useRef(new Image());
@@ -77,7 +76,6 @@ export default function AdminPanel({ onLogout }) {
     const cvs = document.createElement('canvas');
     const ctx = cvs.getContext('2d');
     
-    // Auto-Resize
     let width = currentImgRef.current.width;
     let height = currentImgRef.current.height;
     const MAX_WIDTH = 800;
@@ -91,25 +89,24 @@ export default function AdminPanel({ onLogout }) {
     ctx.drawImage(currentImgRef.current, 0, 0, width, height);
     
     const finalBase64 = cvs.toDataURL('image/jpeg', 0.75); 
-    // MARKDOWN IMAGE FORMAT (From GUESS PAPER PRO)
-    const imgMarkdown = `\n![image](${finalBase64})\n`;
+    // DIRECT HTML (Safe for dashboard)
+    const imgHTML = `\n<div style="text-align:center; margin:15px 0;"><img src="${finalBase64}" style="max-width:100%; border-radius:8px; border:2px solid #374151;" /></div>\n`;
     
     if (imgModal.targetTab === 'new') {
-        setNewTest(prev => ({ ...prev, textInput: prev.textInput.substring(0, imgModal.start) + imgMarkdown + prev.textInput.substring(imgModal.end) }));
+        setNewTest(prev => ({ ...prev, textInput: prev.textInput.substring(0, imgModal.start) + imgHTML + prev.textInput.substring(imgModal.end) }));
     } else {
-        setAppendText(prev => prev.substring(0, imgModal.start) + imgMarkdown + prev.substring(imgModal.end));
+        setAppendText(prev => prev.substring(0, imgModal.start) + imgHTML + prev.substring(imgModal.end));
     }
     setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   };
 
-  // PROSPECTUS MAKER CLEAN PARSER
+  // OLD FORMAT PARSER (FIXED TO SEPARATE OPTIONS CORRECTLY)
   const parseCustomFormat = (rawText) => {
     const lines = String(rawText).split('\n');
     const questions = [];
     let currentQ = null;
     let currentMode = '';
-    let optCount = 0;
-    let preamble = '';
+    let preamble = ''; 
 
     lines.forEach(line => {
       let trimmed = line.trim();
@@ -117,30 +114,35 @@ export default function AdminPanel({ onLogout }) {
       if (trimmed.endsWith('\\')) trimmed = trimmed.slice(0, -1).trim();
       if (!trimmed) return; 
 
-      if (trimmed.startsWith('@@@')) {
-          if (!currentQ) return;
-          optCount++;
-          if (optCount === 1) { currentQ.o1 = trimmed.substring(3).trim(); currentMode = 'o1'; }
-          else if (optCount === 2) { currentQ.o2 = trimmed.substring(3).trim(); currentMode = 'o2'; }
-          else if (optCount === 3) { currentQ.o3 = trimmed.substring(3).trim(); currentMode = 'o3'; }
-          else if (optCount === 4) { currentQ.o4 = trimmed.substring(3).trim(); currentMode = 'o4'; }
+      if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
+        if (currentQ) questions.push(currentQ);
+        let cleanQ = trimmed.substring(1).trim().replace(/^(Q(uestion)?\s*\d+[\.\:\-]?\s*)/i, '');
+        if (preamble) { cleanQ = preamble + "\n" + cleanQ; preamble = ''; } 
+        currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
+        currentMode = 'q';
+      } else if (trimmed.startsWith('#1')) {
+        if (currentQ) { currentQ.o1 = trimmed.substring(2).trim(); currentMode = 'o1'; }
+      } else if (trimmed.startsWith('#2')) {
+        if (currentQ) { currentQ.o2 = trimmed.substring(2).trim(); currentMode = 'o2'; }
+      } else if (trimmed.startsWith('#3')) {
+        if (currentQ) { currentQ.o3 = trimmed.substring(2).trim(); currentMode = 'o3'; }
+      } else if (trimmed.startsWith('#4')) {
+        if (currentQ) { currentQ.o4 = trimmed.substring(2).trim(); currentMode = 'o4'; }
       } else if (trimmed.startsWith('@@')) {
-          if (!currentQ) return; currentQ.ans = trimmed.substring(2).replace(/^Answer:/i, '').trim(); currentMode = 'ans';
+        if (currentQ) { currentQ.exp = trimmed.substring(2).trim(); currentMode = 'exp'; }
       } else if (trimmed.startsWith('@')) {
-          if (currentQ) questions.push(currentQ);
-          let cleanQ = trimmed.substring(1).trim().replace(/^\d+[\.\:\-]?\s*/, '');
-          if (preamble) { cleanQ = preamble + "\n\n" + cleanQ; preamble = ''; }
-          currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
-          optCount = 0; currentMode = 'q';
-      } else if (currentQ) {
-          currentQ[currentMode] += '\n' + trimmed;
+        if (currentQ) { currentQ.ans = trimmed.substring(1).trim(); currentMode = 'ans'; }
       } else {
-          preamble += '\n' + trimmed;
+        if (currentQ) {
+          currentQ[currentMode] += '\n' + trimmed;
+        } else {
+          preamble += '\n' + trimmed; 
+        }
       }
     });
     
     if (currentQ) questions.push(currentQ);
-    if(questions.length === 0) throw new Error("No valid questions found! Start questions with '@'.");
+    if(questions.length === 0) throw new Error("Format Error: Har question '# Q1.' se start hona chahiye.");
 
     return questions.map(q => ({
       question: (q.q || '').trim(),
@@ -158,23 +160,27 @@ export default function AdminPanel({ onLogout }) {
     const promptText = `Act as an expert exam setter. Generate 10 multiple choice questions for [Subject] class [Class] ${langInstruction}.
     
 CRITICAL RULES FOR AI:
-1. Start EVERY question with "@" followed by number (e.g., @ 1.)
-2. Start options strictly with "@@@"
-3. Provide the EXACT correct option text starting with "@@"
-4. Leave exactly one blank line before the next question starts.
-5. MANDATORY: ALWAYS wrap EVERY math/chemistry equation or formula in dollar signs ($). For example: $\\ce{H2O}$ or $C_2H_5Cl$ or $\\ce{CH3Cl}$. Never use \\ce without wrapping it in $.
-6. Do NOT use markdown code blocks or JSON.
+1. Start EVERY question with "# Q" followed by number (e.g., # Q1.)
+2. Start options strictly with #1, #2, #3, #4
+3. Provide the EXACT correct option text starting with "@ "
+4. Provide the explanation starting with "@@ "
+5. Leave exactly one blank line before the next question starts.
+6. MANDATORY: ALWAYS wrap EVERY math/chemistry equation or formula in dollar signs ($). For example: $\\ce{H2O}$ or $C_2H_5Cl$ or $\\ce{CH3Cl}$. Never use \\ce without wrapping it in $.
+7. Do NOT use markdown code blocks or JSON.
 
 Output Format Example:
-@ 1. Question text here $\\ce{H2O}$
-@@@ Option A
-@@@ Option B
-@@@ Option C
-@@@ Option D
-@@ Correct Option Text`;
+# Q1. Question text here $\\ce{H2O}$
+#1 Option A
+#2 Option B
+#3 Option C
+#4 Option D
+@ Correct Option Text
+@@ Explanation Text
+
+# Q2. Next Question...`;
 
     navigator.clipboard.writeText(promptText);
-    alert(`Prospectus Format Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
+    alert(`Strict Dynamic Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
   };
 
   const handleGenerateTest = async () => {
@@ -257,11 +263,10 @@ Output Format Example:
   return (
     <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans relative">
       
-      {/* GUESS PAPER PRO IMAGE MODAL UI */}
       {imgModal.isOpen && (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4">
           <div className="bg-gray-900 border-2 border-blue-500 rounded-2xl p-6 md:p-10 w-full max-w-2xl shadow-[0_0_40px_rgba(0,0,255,0.4)] flex flex-col items-center">
-            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Adjust & Clean Image</h2>
+            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Adjust Image</h2>
             
             <div className="w-full bg-black rounded-lg overflow-hidden border border-gray-700 flex items-center justify-center p-2 mb-6" style={{ minHeight: '200px' }}>
               <img src={imgModal.src} alt="Preview" style={{ filter: `brightness(${imgSettings.brightness}%) contrast(${imgSettings.contrast}%) grayscale(${imgSettings.grayscale}%)`, maxHeight: '300px' }} className="max-w-full object-contain rounded-md" />
@@ -273,18 +278,18 @@ Output Format Example:
             </div>
             
             <div className="w-full mb-4">
-              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Contrast (Clean Text)</span><span className="text-blue-400">{imgSettings.contrast}%</span></label>
+              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Contrast</span><span className="text-blue-400">{imgSettings.contrast}%</span></label>
               <input type="range" min="50" max="200" value={imgSettings.contrast} onChange={(e) => setImgSettings({...imgSettings, contrast: e.target.value})} className="w-full cursor-pointer" />
             </div>
             
             <div className="w-full mb-8">
-              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Grayscale (B&W)</span><span className="text-blue-400">{imgSettings.grayscale}%</span></label>
+              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Grayscale</span><span className="text-blue-400">{imgSettings.grayscale}%</span></label>
               <input type="range" min="0" max="100" value={imgSettings.grayscale} onChange={(e) => setImgSettings({...imgSettings, grayscale: e.target.value})} className="w-full cursor-pointer" />
             </div>
 
             <div className="flex gap-4 w-full">
               <button onClick={() => setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 })} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl text-lg">Cancel</button>
-              <button onClick={insertProcessedImage} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg shadow-[0_0_15px_rgba(34,197,94,0.4)]">✅ Insert Image</button>
+              <button onClick={insertProcessedImage} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg shadow-[0_0_15px_rgba(34,197,94,0.4)]">✅ Insert</button>
             </div>
           </div>
         </div>
@@ -358,7 +363,7 @@ Output Format Example:
                 onChange={(e) => setNewTest({...newTest, textInput: e.target.value})}
                 onPaste={(e) => handleImagePaste(e, 'new')}
                 className="p-5 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-blue-500 leading-relaxed"
-                placeholder="@ 1. Question..."
+                placeholder="# Q1. Question..."
               ></textarea>
             </div>
             
