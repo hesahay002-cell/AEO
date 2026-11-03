@@ -420,4 +420,53 @@ CRITICAL RULES FOR AI:
                 </div>
                 <div className="w-full">
                   <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test</label>
-                  <select value={resultTest} onChange
+                  <select value={resultTest} onChange={(e) => setResultTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                    <option value="" disabled>Select Test</option>
+                    {tests.filter(t => t.className === resultClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
+                  </select>
+                </div>
+                <button onClick={handleDownloadPDF} className="w-full md:w-auto bg-yellow-600 hover:bg-yellow-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Generate PDF</button>
+              </div>
+            </div>
+
+            <div className="bg-gray-800 border-l-4 border-blue-500 p-8 rounded-2xl shadow-lg">
+              <h3 className="text-3xl font-extrabold text-blue-400 mb-6">📊 Export Student Database</h3>
+              <div className="flex flex-col md:flex-row gap-6 items-end">
+                <div className="w-full md:w-2/3">
+                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class to Export</label>
+                  <select value={csvClass} onChange={(e) => setCsvClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                    <option value="All">All Classes</option>
+                    {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                  </select>
+                </div>
+                <button onClick={handleDownloadCSV} className="w-full md:w-1/3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Download CSV</button>
+              </div>
+            </div>
+
+            <div className="bg-gray-800 border-l-4 border-red-500 p-8 rounded-2xl shadow-lg">
+              <h3 className="text-3xl font-extrabold text-red-500 mb-6">🗑️ Permanently Delete Test</h3>
+              <div className="flex flex-col md:flex-row gap-6 items-end">
+                <div className="w-full">
+                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class</label>
+                  <select value={deleteClass} onChange={(e) => setDeleteClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                    <option value="" disabled>Select Class</option>
+                    {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                  </select>
+                </div>
+                <div className="w-full">
+                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test</label>
+                  <select value={deleteTest} onChange={(e) => setDeleteTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                    <option value="" disabled>Select Test</option>
+                    {tests.filter(t => t.className === deleteClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
+                  </select>
+                </div>
+                <button onClick={handleDeleteTest} className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Delete Test</button>
+              </div>
+            </div>
+
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
