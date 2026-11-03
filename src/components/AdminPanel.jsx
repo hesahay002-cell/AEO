@@ -11,7 +11,7 @@ export default function AdminPanel({ onLogout }) {
   const [loading, setLoading] = useState(false);
   
   const [newTest, setNewTest] = useState({ class: '', subject: '', marks: '', negativeMarks: '', duration: '', startTime: '', endTime: '', textInput: '' });
-  const [promptLang, setPromptLang] = useState('bilingual'); // 'english', 'hindi', 'bilingual'
+  const [promptLang, setPromptLang] = useState('bilingual');
 
   const [resultClass, setResultClass] = useState('');
   const [resultTest, setResultTest] = useState('');
@@ -40,7 +40,6 @@ export default function AdminPanel({ onLogout }) {
     setStudents(studentsData);
   };
 
-  // ================= IMAGE PASTE HANDLER =================
   const handleImagePaste = (e, stateUpdater, currentStateValue) => {
     const items = (e.clipboardData || window.clipboardData).items;
     for (let index in items) {
@@ -52,7 +51,6 @@ export default function AdminPanel({ onLogout }) {
         reader.onload = (event) => {
           const base64Data = event.target.result;
           const imgTag = `\n<img src="${base64Data}" alt="question-img" style="max-width:100%; border-radius:8px; margin:10px 0; border: 1px solid #4b5563;" />\n`;
-          
           const textarea = e.target;
           const start = textarea.selectionStart;
           const end = textarea.selectionEnd;
@@ -65,7 +63,7 @@ export default function AdminPanel({ onLogout }) {
     }
   };
 
-  // ================= HASHTAG FORMAT PARSER (WITH Q NUMBER CLEANER) =================
+  // ================= SUPER CLEANER PARSER (FIXED ERROR) =================
   const parseCustomFormat = (rawText) => {
     const lines = rawText.split('\n');
     const questions = [];
@@ -73,36 +71,52 @@ export default function AdminPanel({ onLogout }) {
     let currentMode = '';
 
     lines.forEach(line => {
-      const trimmed = line.trim();
+      let trimmed = line.trim();
       
+      // 1. Clean ChatGPT Markdown backslashes from start (e.g. "\# Q1" becomes "# Q1")
+      trimmed = trimmed.replace(/^\\+/, '');
+      
+      // 2. Clean stray backslashes at the end of the line (Markdown hard breaks)
+      if (trimmed.endsWith('\\')) {
+        trimmed = trimmed.slice(0, -1).trim();
+      }
+
+      if (!trimmed) return; // Skip empty lines
+
       if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
         if (currentQ) questions.push(currentQ);
         
-        // Remove # and any auto-generated Q1., Question 2:, etc. from the prompt text
-        let cleanQ = line.substring(1).trim();
+        let cleanQ = trimmed.substring(1).trim();
         cleanQ = cleanQ.replace(/^(Q(uestion)?\s*\d+[\.\:\-]?\s*)/i, '');
         
         currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
         currentMode = 'q';
       } else if (trimmed.startsWith('#1')) {
-        currentQ.o1 = line.substring(2).trim(); currentMode = '1';
+        if(!currentQ) return; // Prevent null error
+        currentQ.o1 = trimmed.substring(2).trim(); currentMode = '1';
       } else if (trimmed.startsWith('#2')) {
-        currentQ.o2 = line.substring(2).trim(); currentMode = '2';
+        if(!currentQ) return;
+        currentQ.o2 = trimmed.substring(2).trim(); currentMode = '2';
       } else if (trimmed.startsWith('#3')) {
-        currentQ.o3 = line.substring(2).trim(); currentMode = '3';
+        if(!currentQ) return;
+        currentQ.o3 = trimmed.substring(2).trim(); currentMode = '3';
       } else if (trimmed.startsWith('#4')) {
-        currentQ.o4 = line.substring(2).trim(); currentMode = '4';
+        if(!currentQ) return;
+        currentQ.o4 = trimmed.substring(2).trim(); currentMode = '4';
       } else if (trimmed.startsWith('@@')) {
-        currentQ.exp = line.substring(2).trim(); currentMode = 'exp';
+        if(!currentQ) return;
+        currentQ.exp = trimmed.substring(2).trim(); currentMode = 'exp';
       } else if (trimmed.startsWith('@')) {
-        currentQ.ans = line.substring(1).trim(); currentMode = 'ans';
+        if(!currentQ) return;
+        currentQ.ans = trimmed.substring(1).trim(); currentMode = 'ans';
       } else if (currentQ) {
-        currentQ[currentMode] += '\n' + line;
+        currentQ[currentMode] += '\n' + trimmed;
       }
     });
+    
     if (currentQ) questions.push(currentQ);
 
-    if(questions.length === 0) throw new Error("No questions found! Ensure each question starts with #");
+    if(questions.length === 0) throw new Error("No valid questions found! Please check the format.");
 
     return questions.map(q => ({
       question: q.q.trim(),
@@ -112,15 +126,18 @@ export default function AdminPanel({ onLogout }) {
     }));
   };
 
-  // ================= DYNAMIC PROMPT GENERATOR (WITH Q NUMBERS) =================
   const copyPrompt = () => {
     let langInstruction = "in BOTH English and Hindi (e.g., Eng: [Text]\\nHin: [Text])";
     if (promptLang === 'english') langInstruction = "in ENGLISH ONLY";
     if (promptLang === 'hindi') langInstruction = "in HINDI ONLY";
 
-    const promptText = `Generate 10 multiple choice questions for [Subject] class [Class] ${langInstruction}.
-Use standard LaTeX format for ANY Mathematical equations (e.g., $x^2 + y^2 = z^2$) and Chemistry formulas (e.g., $H_2O$).
-Do NOT use JSON or markdown code blocks. Output STRICTLY in this exact text format.
+    const promptText = `Act as an expert exam setter. Generate 10 multiple choice questions for [Subject] class [Class] ${langInstruction}.
+    
+CRITICAL RULES FOR AI:
+1. You MUST start EVERY single question with "# Q" followed by the number. (e.g., # Q1. Eng: ...)
+2. Do NOT use JSON or markdown code blocks. Do NOT use backslashes to escape characters.
+3. Use standard LaTeX format for ANY Mathematical equations (e.g., $x^2 + y^2 = z^2$) and Chemistry formulas.
+4. Output STRICTLY in this exact text format and do not add any conversational text:
 
 # Q1. [Question text here]
 #1 [Option A]
@@ -128,13 +145,10 @@ Do NOT use JSON or markdown code blocks. Output STRICTLY in this exact text form
 #3 [Option C]
 #4 [Option D]
 @ [Exact string of correct option]
-@@ [Explanation/Review]
-
-# Q2. [Question text here]
-...and so on.`;
+@@ [Explanation/Review]`;
 
     navigator.clipboard.writeText(promptText);
-    alert(`Dynamic Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
+    alert(`Strict Dynamic Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
   };
 
   const handleGenerateTest = async () => {
@@ -406,53 +420,4 @@ Do NOT use JSON or markdown code blocks. Output STRICTLY in this exact text form
                 </div>
                 <div className="w-full">
                   <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test</label>
-                  <select value={resultTest} onChange={(e) => setResultTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
-                    <option value="" disabled>Select Test</option>
-                    {tests.filter(t => t.className === resultClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
-                  </select>
-                </div>
-                <button onClick={handleDownloadPDF} className="w-full md:w-auto bg-yellow-600 hover:bg-yellow-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Generate PDF</button>
-              </div>
-            </div>
-
-            <div className="bg-gray-800 border-l-4 border-blue-500 p-8 rounded-2xl shadow-lg">
-              <h3 className="text-3xl font-extrabold text-blue-400 mb-6">📊 Export Student Database</h3>
-              <div className="flex flex-col md:flex-row gap-6 items-end">
-                <div className="w-full md:w-2/3">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class to Export</label>
-                  <select value={csvClass} onChange={(e) => setCsvClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
-                    <option value="All">All Classes</option>
-                    {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
-                  </select>
-                </div>
-                <button onClick={handleDownloadCSV} className="w-full md:w-1/3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Download CSV</button>
-              </div>
-            </div>
-
-            <div className="bg-gray-800 border-l-4 border-red-500 p-8 rounded-2xl shadow-lg">
-              <h3 className="text-3xl font-extrabold text-red-500 mb-6">🗑️ Permanently Delete Test</h3>
-              <div className="flex flex-col md:flex-row gap-6 items-end">
-                <div className="w-full">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class</label>
-                  <select value={deleteClass} onChange={(e) => setDeleteClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
-                    <option value="" disabled>Select Class</option>
-                    {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
-                  </select>
-                </div>
-                <div className="w-full">
-                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test</label>
-                  <select value={deleteTest} onChange={(e) => setDeleteTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
-                    <option value="" disabled>Select Test</option>
-                    {tests.filter(t => t.className === deleteClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
-                  </select>
-                </div>
-                <button onClick={handleDeleteTest} className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Delete Test</button>
-              </div>
-            </div>
-
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+                  <select value={resultTest} onChange
