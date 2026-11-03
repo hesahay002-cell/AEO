@@ -30,9 +30,14 @@ export default function Dashboard({ user, onLogout }) {
     }
   };
 
+  // ================= FIXED MATHJAX TIMING =================
   useEffect(() => {
     if (window.MathJax && (testStatus === 'taking' || testStatus === 'review')) {
-      window.MathJax.typesetPromise().catch((err) => console.log(err));
+      // 100ms delay ensures React has injected the text into the DOM before MathJax runs
+      const timeoutId = setTimeout(() => {
+        window.MathJax.typesetPromise().catch((err) => console.log("MathJax Error:", err));
+      }, 100);
+      return () => clearTimeout(timeoutId);
     }
   }, [currentQIndex, language, testStatus, activeTest]);
 
@@ -130,35 +135,24 @@ export default function Dashboard({ user, onLogout }) {
     if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>console.log(e));
   };
 
-  // ================= ULTRA SMART PARSER =================
   const parseText = (text) => {
     if (!text) return "";
-
-    // 1. Auto-fix LaTeX errors (jaise \xrightarrow bina brackets ke)
     let cleanText = text.replace(/\\xrightarrow(?!\s*\{)/g, '\\rightarrow');
-
-    // 2. Powerful Regex for Eng/Hin extraction
     const engMatch = cleanText.match(/Eng:\s*([\s\S]*?)(?=Hin:|$)/i);
     const hinMatch = cleanText.match(/Hin:\s*([\s\S]*?)$/i);
 
     if (engMatch || hinMatch) {
       let engPart = engMatch ? engMatch[1].trim() : cleanText.replace(/Hin:[\s\S]*/i, '').trim();
       let hinPart = hinMatch ? hinMatch[1].trim() : engPart;
-      
-      // Cleanup stray tags just in case
       engPart = engPart.replace(/^Eng:\s*/i, '');
       hinPart = hinPart.replace(/^Hin:\s*/i, '');
-      
       return language === 'english' ? engPart : hinPart;
     }
 
-    // Format 2: English / Hindi
     if (cleanText.includes(" / ")) {
       const parts = cleanText.split(" / ");
       return language === 'english' ? parts[0].trim() : (parts[1] ? parts[1].trim() : parts[0].trim());
     }
-
-    // Final cleanup for single language texts with stray tags
     return cleanText.replace(/^Eng:\s*/i, '').replace(/^Hin:\s*/i, '');
   };
 
