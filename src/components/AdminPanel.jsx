@@ -40,14 +40,14 @@ export default function AdminPanel({ onLogout }) {
     setStudents(studentsData);
   };
 
-  // ================= BULLETPROOF IMAGE PASTE HANDLER =================
+  // ================= ROBUST IMAGE PASTE HANDLER =================
   const handleImagePaste = (e, isAppendTab = false) => {
-    const items = (e.clipboardData || window.clipboardData).items;
-    
-    // Use traditional for-loop to avoid browser clipboard API iteration bugs
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf('image') !== -1) {
-        e.preventDefault(); // Stop default text paste behavior
+        e.preventDefault(); // Only prevent default if it is actually an image
         const blob = items[i].getAsFile();
         const reader = new FileReader();
         
@@ -59,7 +59,6 @@ export default function AdminPanel({ onLogout }) {
           const start = textarea.selectionStart || 0;
           const end = textarea.selectionEnd || 0;
 
-          // Functional state update prevents React stale-state issues
           if (isAppendTab) {
             setAppendText(prev => prev.substring(0, start) + imgTag + prev.substring(end));
           } else {
@@ -70,12 +69,11 @@ export default function AdminPanel({ onLogout }) {
           }
         };
         reader.readAsDataURL(blob);
-        break; // Process only one image at a time
+        break;
       }
     }
   };
 
-  // ================= SUPER CLEANER PARSER =================
   const parseCustomFormat = (rawText) => {
     const lines = rawText.split('\n');
     const questions = [];
@@ -84,8 +82,6 @@ export default function AdminPanel({ onLogout }) {
 
     lines.forEach(line => {
       let trimmed = line.trim();
-      
-      // Clean ChatGPT Markdown backslashes
       trimmed = trimmed.replace(/^\\+/, '');
       if (trimmed.endsWith('\\')) trimmed = trimmed.slice(0, -1).trim();
       if (!trimmed) return; 
@@ -132,6 +128,7 @@ export default function AdminPanel({ onLogout }) {
     }));
   };
 
+  // ================= NEW STRICT PROMPT (GAPS INCLUDED) =================
   const copyPrompt = () => {
     let langInstruction = "in BOTH English and Hindi (e.g., Eng: [Text]\\nHin: [Text])";
     if (promptLang === 'english') langInstruction = "in ENGLISH ONLY";
@@ -140,10 +137,11 @@ export default function AdminPanel({ onLogout }) {
     const promptText = `Act as an expert exam setter. Generate 10 multiple choice questions for [Subject] class [Class] ${langInstruction}.
     
 CRITICAL RULES FOR AI:
-1. You MUST start EVERY single question with "# Q" followed by the number. (e.g., # Q1. Eng: ...)
-2. Do NOT use JSON or markdown code blocks. Do NOT use backslashes to escape characters.
-3. Use standard LaTeX format for ANY Mathematical equations (e.g., $x^2 + y^2 = z^2$) and Chemistry formulas.
-4. Output STRICTLY in this exact text format and do not add any conversational text:
+1. Start EVERY single question with "# Q" followed by the number. (e.g., # Q1. Eng: ...)
+2. Do NOT use JSON or markdown code blocks (No \`\`\`). Do NOT use backslashes to escape characters.
+3. Use standard LaTeX format for Mathematical equations and Chemistry formulas (e.g., $C_2H_5Cl$).
+4. LEAVE ONE BLANK LINE between the explanation (@@) of one question and the start (# Q) of the next question.
+5. Output STRICTLY in this exact text format and do not add any conversational text:
 
 # Q1. [Question text here]
 #1 [Option A]
@@ -151,7 +149,9 @@ CRITICAL RULES FOR AI:
 #3 [Option C]
 #4 [Option D]
 @ [Exact string of correct option]
-@@ [Explanation/Review]`;
+@@ [Explanation/Review]
+
+# Q2. [Next Question...]`;
 
     navigator.clipboard.writeText(promptText);
     alert(`Strict Dynamic Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
