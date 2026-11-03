@@ -10,7 +10,8 @@ export default function AdminPanel({ onLogout }) {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
   
-  const [newTest, setNewTest] = useState({ class: '', subject: '', marks: '', negativeMarks: '', duration: '', startTime: '', endTime: '', jsonInput: '' });
+  const [newTest, setNewTest] = useState({ class: '', subject: '', marks: '', negativeMarks: '', duration: '', startTime: '', endTime: '', textInput: '' });
+  const [promptLang, setPromptLang] = useState('bilingual'); // 'english', 'hindi', 'bilingual'
 
   const [resultClass, setResultClass] = useState('');
   const [resultTest, setResultTest] = useState('');
@@ -20,7 +21,7 @@ export default function AdminPanel({ onLogout }) {
 
   const [appendClass, setAppendClass] = useState('');
   const [appendTest, setAppendTest] = useState('');
-  const [appendJson, setAppendJson] = useState('');
+  const [appendText, setAppendText] = useState('');
 
   useEffect(() => {
     fetchTests();
@@ -39,65 +40,103 @@ export default function AdminPanel({ onLogout }) {
     setStudents(studentsData);
   };
 
-  // ================= ULTRA SUPER AUTO-CORRECT LOGIC =================
-  const sanitizeAndFormatJSON = (jsonString) => {
-    try {
-      // 1. Extra HTML entities aur stray backslashes ko hatao
-      let cleanStr = jsonString.replace(/&#x20;/g, ' '); // HTML spaces theek karein
-      cleanStr = cleanStr.replace(/\\\s*\n/g, '\n'); // Line ke end wale \ ko hatao
-      cleanStr = cleanStr.replace(/\\(?=[,\]}])/g, ''); // Comma ya bracket ke pehle wale \ ko hatao
-      
-      // 2. Sirf [ se ] tak ka asli hissa nikalo
-      const firstBracket = cleanStr.indexOf('[');
-      const lastBracket = cleanStr.lastIndexOf(']');
-      if (firstBracket === -1 || lastBracket === -1) throw new Error("Array brackets [] missing");
-      
-      cleanStr = cleanStr.substring(firstBracket, lastBracket + 1);
-      
-      // 3. Trailing commas ko theek karo
-      cleanStr = cleanStr.replace(/,\s*([\]}])/g, '$1');
-      
-      let parsedArray = JSON.parse(cleanStr);
-
-      // 4. Agar AI ne option_a, option_b format diya hai, toh usko khud theek karo
-      return parsedArray.map(q => {
-        if (q.option_a || q.option_1 || q.options_a) {
-          return {
-            question: q.question || "",
-            options: [q.option_a || q.option_1, q.option_b || q.option_2, q.option_c || q.option_3, q.option_d || q.option_4].filter(Boolean),
-            answer: q.correct_answer || q.answer || q.correctAnswer || "",
-            review: q.review || q.explanation || ""
-          };
-        }
-        return q;
-      });
-    } catch (error) {
-      throw new Error("Auto-Correct Failed: " + error.message);
+  // ================= IMAGE PASTE HANDLER =================
+  const handleImagePaste = (e, stateUpdater, currentStateValue) => {
+    const items = (e.clipboardData || window.clipboardData).items;
+    for (let index in items) {
+      const item = items[index];
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64Data = event.target.result;
+          const imgTag = `\n<img src="${base64Data}" alt="question-img" style="max-width:100%; border-radius:8px; margin:10px 0; border: 1px solid #4b5563;" />\n`;
+          
+          const textarea = e.target;
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          const newText = currentStateValue.substring(0, start) + imgTag + currentStateValue.substring(end);
+          stateUpdater(newText);
+        };
+        reader.readAsDataURL(blob);
+        return; 
+      }
     }
   };
 
+  // ================= HASHTAG FORMAT PARSER =================
+  const parseCustomFormat = (rawText) => {
+    const lines = rawText.split('\n');
+    const questions = [];
+    let currentQ = null;
+    let currentMode = '';
+
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      // Match # but NOT #1, #2, etc.
+      if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
+        if (currentQ) questions.push(currentQ);
+        currentQ = { q: line.substring(1).trim(), o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
+        currentMode = 'q';
+      } else if (trimmed.startsWith('#1')) {
+        currentQ.o1 = line.substring(2).trim(); currentMode = '1';
+      } else if (trimmed.startsWith('#2')) {
+        currentQ.o2 = line.substring(2).trim(); currentMode = '2';
+      } else if (trimmed.startsWith('#3')) {
+        currentQ.o3 = line.substring(2).trim(); currentMode = '3';
+      } else if (trimmed.startsWith('#4')) {
+        currentQ.o4 = line.substring(2).trim(); currentMode = '4';
+      } else if (trimmed.startsWith('@@')) {
+        currentQ.exp = line.substring(2).trim(); currentMode = 'exp';
+      } else if (trimmed.startsWith('@')) {
+        currentQ.ans = line.substring(1).trim(); currentMode = 'ans';
+      } else if (currentQ) {
+        currentQ[currentMode] += '\n' + line;
+      }
+    });
+    if (currentQ) questions.push(currentQ);
+
+    if(questions.length === 0) throw new Error("No questions found! Ensure you start each question with #");
+
+    return questions.map(q => ({
+      question: q.q.trim(),
+      options: [q.o1.trim(), q.o2.trim(), q.o3.trim(), q.o4.trim()].filter(Boolean),
+      answer: q.ans.trim(),
+      review: q.exp.trim()
+    }));
+  };
+
+  // ================= DYNAMIC PROMPT GENERATOR =================
   const copyPrompt = () => {
-    const promptText = `Generate 10 multiple choice questions for [Subject] class [Class]. Provide questions and review (solution) in BOTH English and Hindi. Output strictly in VALID JSON array format.
-[
-  {
-    "question": "Eng: [Question]\\nHin: [प्रश्न]",
-    "options": ["A", "B", "C", "D"],
-    "answer": "Exact string of correct option",
-    "review": "Eng: [Explanation]\\nHin: [व्याख्या]"
-  }
-]`;
+    let langInstruction = "in BOTH English and Hindi (e.g., Eng: [Text]\\nHin: [Text])";
+    if (promptLang === 'english') langInstruction = "in ENGLISH ONLY";
+    if (promptLang === 'hindi') langInstruction = "in HINDI ONLY";
+
+    const promptText = `Generate 10 multiple choice questions for [Subject] class [Class] ${langInstruction}.
+Use standard LaTeX format for ANY Mathematical equations (e.g., $x^2 + y^2 = z^2$) and Chemistry formulas (e.g., $H_2O$).
+Do NOT use JSON or markdown code blocks. Output STRICTLY in this text format:
+
+# [Question text here]
+#1 [Option A]
+#2 [Option B]
+#3 [Option C]
+#4 [Option D]
+@ [Exact string of correct option]
+@@ [Explanation/Review]`;
+
     navigator.clipboard.writeText(promptText);
-    alert("Premium AI Prompt copied! Paste it in ChatGPT.");
+    alert(`Dynamic Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
   };
 
   const handleGenerateTest = async () => {
-    if (!newTest.class || !newTest.subject || !newTest.jsonInput || !newTest.marks || !newTest.negativeMarks) {
+    if (!newTest.class || !newTest.subject || !newTest.textInput || !newTest.marks || !newTest.negativeMarks) {
       alert("Please fill all required fields.");
       return;
     }
     try {
       setLoading(true);
-      const questions = sanitizeAndFormatJSON(newTest.jsonInput);
+      const questions = parseCustomFormat(newTest.textInput);
       
       await addDoc(collection(db, "tests"), {
         className: newTest.class,
@@ -111,21 +150,21 @@ export default function AdminPanel({ onLogout }) {
         createdAt: new Date().toISOString(),
         status: "active"
       });
-      alert("Test Generated Successfully!");
-      setNewTest({ class: '', subject: '', marks: '', negativeMarks: '', duration: '', startTime: '', endTime: '', jsonInput: '' });
+      alert(`Success! Generated test with ${questions.length} questions.`);
+      setNewTest({ class: '', subject: '', marks: '', negativeMarks: '', duration: '', startTime: '', endTime: '', textInput: '' });
       fetchTests();
     } catch (error) {
-      alert(error.message + "\nKripya apne JSON ko ek baar check karein.");
+      alert("Format Error: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleAddMoreQuestions = async () => {
-    if (!appendTest || !appendJson) return alert("Please select a test and paste JSON.");
+    if (!appendTest || !appendText) return alert("Please select a test and paste text.");
     try {
       setLoading(true);
-      const newQuestions = sanitizeAndFormatJSON(appendJson);
+      const newQuestions = parseCustomFormat(appendText);
 
       const testIndex = tests.findIndex(t => t.id === appendTest);
       if(testIndex === -1) throw new Error("Test not found");
@@ -138,7 +177,7 @@ export default function AdminPanel({ onLogout }) {
       });
 
       alert(`Successfully added ${newQuestions.length} new questions!`);
-      setAppendJson('');
+      setAppendText('');
       setAppendTest('');
       fetchTests();
     } catch (error) {
@@ -236,6 +275,7 @@ export default function AdminPanel({ onLogout }) {
         {activeTab === 'generate' && (
           <div>
             <h2 className="text-3xl text-blue-400 font-bold mb-8 border-b border-gray-700 pb-4">Create New Test</h2>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="w-full">
                 <label className="text-gray-300 text-sm font-bold mb-2 block">Class / Category</label>
@@ -269,12 +309,30 @@ export default function AdminPanel({ onLogout }) {
                 <input type="datetime-local" style={{ colorScheme: 'dark' }} value={newTest.endTime} onChange={(e) => setNewTest({...newTest, endTime: e.target.value})} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer" />
               </div>
             </div>
-            <div className="w-full mb-8">
-              <label className="text-green-400 text-sm font-bold mb-2 block">Ultra Auto-Correct Enabled JSON Input</label>
-              <textarea rows="8" placeholder='Paste AI JSON Here... (No matter what format AI gives, we will fix it!)' value={newTest.jsonInput} onChange={(e) => setNewTest({...newTest, jsonInput: e.target.value})} className="p-5 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-blue-500"></textarea>
+
+            <div className="mb-6 p-4 bg-gray-800 rounded-2xl border border-gray-600">
+              <h3 className="text-yellow-400 font-bold mb-3">1. Select AI Generation Language</h3>
+              <div className="flex gap-4">
+                <button onClick={() => setPromptLang('english')} className={`px-4 py-2 rounded-lg font-bold transition-colors ${promptLang === 'english' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🇬🇧 English Only</button>
+                <button onClick={() => setPromptLang('hindi')} className={`px-4 py-2 rounded-lg font-bold transition-colors ${promptLang === 'hindi' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🇮🇳 Hindi Only</button>
+                <button onClick={() => setPromptLang('bilingual')} className={`px-4 py-2 rounded-lg font-bold transition-colors ${promptLang === 'bilingual' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300'}`}>🌐 Bilingual (Both)</button>
+              </div>
             </div>
+
+            <div className="w-full mb-8">
+              <label className="text-green-400 text-sm font-bold mb-2 block">2. Paste Custom Text Format here (Ctrl+V works for Text & Screenshots!)</label>
+              <textarea 
+                rows="10" 
+                placeholder="# Question\n#1 Option A\n#2 Option B\n#3 Option C\n#4 Option D\n@ Correct Answer\n@@ Explanation\n\n(Tip: You can directly paste screenshots inside this box!)" 
+                value={newTest.textInput} 
+                onChange={(e) => setNewTest({...newTest, textInput: e.target.value})}
+                onPaste={(e) => handleImagePaste(e, (val) => setNewTest({...newTest, textInput: val}), newTest.textInput)}
+                className="p-5 text-lg bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-blue-500 leading-relaxed"
+              ></textarea>
+            </div>
+            
             <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-              <button onClick={copyPrompt} className="text-blue-400 underline hover:text-blue-300 text-xl font-bold">Copy AI Prompt</button>
+              <button onClick={copyPrompt} className="text-blue-400 underline hover:text-blue-300 text-xl font-bold">Copy Dynamic Prompt for ChatGPT</button>
               <button onClick={handleGenerateTest} disabled={loading} className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-2xl py-5 px-12 rounded-2xl shadow-[0_0_25px_rgba(37,99,235,0.4)]">
                 {loading ? 'Generating...' : 'Generate Test'}
               </button>
@@ -286,7 +344,6 @@ export default function AdminPanel({ onLogout }) {
         {activeTab === 'append' && (
           <div>
             <h2 className="text-3xl text-green-400 font-bold mb-6 border-b border-gray-700 pb-4">➕ Add More Questions</h2>
-            <p className="text-gray-400 mb-6 text-lg">Select a previously created test and paste a new JSON to expand its question bank.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div className="w-full">
@@ -304,10 +361,17 @@ export default function AdminPanel({ onLogout }) {
                 </select>
               </div>
             </div>
-            
+
             <div className="w-full mb-6">
-              <label className="text-green-400 text-sm font-bold mb-2 block">Paste New JSON Output here</label>
-              <textarea rows="8" placeholder='Paste extra questions JSON here...' value={appendJson} onChange={(e) => setAppendJson(e.target.value)} className="p-5 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-green-500"></textarea>
+              <label className="text-green-400 text-sm font-bold mb-2 block">Paste Custom Text Format here (Ctrl+V works for Screenshots!)</label>
+              <textarea 
+                rows="8" 
+                placeholder="# Question..." 
+                value={appendText} 
+                onChange={(e) => setAppendText(e.target.value)} 
+                onPaste={(e) => handleImagePaste(e, setAppendText, appendText)}
+                className="p-5 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-green-500"
+              ></textarea>
             </div>
 
             <div className="flex justify-between items-center">
