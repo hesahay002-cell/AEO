@@ -18,10 +18,10 @@ export default function Dashboard({ user, onLogout }) {
 
   const fetchTests = async () => {
     try {
-      const q = query(collection(db, "tests"), where("className", "==", user.className));
+      const q = query(collection(db, "tests"), where("className", "==", user?.className || ""));
       const querySnapshot = await getDocs(q);
       setAvailableTests(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } catch (error) { console.error(error); }
+    } catch (error) { console.error("Error fetching tests:", error); }
   };
 
   // ================= SECURE MATHJAX ENGINE =================
@@ -59,7 +59,7 @@ export default function Dashboard({ user, onLogout }) {
     }
   }, [currentQIndex, language, testStatus, activeTest]);
 
-  // ================= TEST SECURITY =================
+  // ================= ANTI-CRASH AUTO-SAVE & SECURITY =================
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (testStatus === 'taking') { e.preventDefault(); e.returnValue = ""; }
@@ -70,9 +70,9 @@ export default function Dashboard({ user, onLogout }) {
 
   useEffect(() => {
     if (testStatus === 'taking' && activeTest) {
-      localStorage.setItem(`aeo_test_${user.phone || user.uid}`, JSON.stringify({ testId: activeTest.id, timeLeft, answers, questionStatus, currentQIndex, warnings, language }));
+      localStorage.setItem(`aeo_test_${user?.phone || user?.uid || 'temp'}`, JSON.stringify({ testId: activeTest.id, timeLeft, answers, questionStatus, currentQIndex, warnings, language }));
     }
-  }, [timeLeft, answers, questionStatus, currentQIndex, warnings, language, testStatus, activeTest]);
+  }, [timeLeft, answers, questionStatus, currentQIndex, warnings, language, testStatus, activeTest, user]);
 
   useEffect(() => {
     let timer;
@@ -102,32 +102,37 @@ export default function Dashboard({ user, onLogout }) {
     if (now < new Date(test.startTime).getTime()) return alert("This test has not started yet.");
     if (now > new Date(test.endTime).getTime()) return alert("This test has expired.");
     
-    const savedSessionStr = localStorage.getItem(`aeo_test_${user.phone || user.uid}`);
+    // Check if test has questions to prevent crash
+    if (!test.questions || test.questions.length === 0) {
+        return alert("Error: This test has no questions inside it! Please tell admin to delete and recreate it.");
+    }
+
+    const savedSessionStr = localStorage.getItem(`aeo_test_${user?.phone || user?.uid || 'temp'}`);
     if (savedSessionStr) {
       const savedSession = JSON.parse(savedSessionStr);
       if (savedSession.testId === test.id) {
-         setActiveTest(test); setTimeLeft(savedSession.timeLeft); setAnswers(savedSession.answers || {});
+         setActiveTest(test); setTimeLeft(savedSession.timeLeft || test.durationMinutes * 60); setAnswers(savedSession.answers || {});
          setQuestionStatus(savedSession.questionStatus || {}); setCurrentQIndex(savedSession.currentQIndex || 0);
          setWarnings(savedSession.warnings || 0); setLanguage(savedSession.language || 'english'); setTestStatus('taking');
          if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>{});
          return; 
       }
     }
-    setActiveTest(test); setTimeLeft(test.durationMinutes * 60); setAnswers({}); setQuestionStatus({});
+    setActiveTest(test); setTimeLeft((test.durationMinutes || 60) * 60); setAnswers({}); setQuestionStatus({});
     setCurrentQIndex(0); setWarnings(0); setLanguage('english'); setTestStatus('taking');
     if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>{});
   };
 
-  // ================= THE ULTIMATE PARSER =================
+  // ================= BULLETPROOF PARSER =================
   const parseText = (rawText) => {
     if (!rawText) return "";
-    let text = rawText;
+    let text = String(rawText);
 
-    // 1. Markdown Basics
+    // Markdown Basics
     text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     text = text.replace(/__(.*?)__/g, '<u>$1</u>');
 
-    // 2. Safe Image Extraction (Prevents translation engine from breaking images)
+    // Safe Image Extraction
     const imageTokens = [];
     text = text.replace(/!\[image\]\((data:image\/[^)]+)\)/g, (match, base64) => {
         const token = `@@IMAGE_TOKEN_${imageTokens.length}@@`;
@@ -135,7 +140,7 @@ export default function Dashboard({ user, onLogout }) {
         return token;
     });
 
-    // 3. Bilingual Engine
+    // Bilingual Engine
     const hasEng = /Eng:/i.test(text);
     const hasHin = /Hin:/i.test(text);
 
@@ -161,15 +166,14 @@ export default function Dashboard({ user, onLogout }) {
       text = language === 'english' ? parts[0].trim() : (parts[1] ? parts[1].trim() : parts[0].trim());
     }
 
-    // 4. Prospectus Maker Math Fixes
+    // Math Fixes
     text = text.replace(/\\xrightarrow(?!\s*\{)/g, '\\rightarrow');
     text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, formula) => '\\(' + formula.trim() + '\\)');
 
-    // 5. Restore Images
+    // Restore Images
     for (let i = 0; i < imageTokens.length; i++) {
         text = text.replace(`@@IMAGE_TOKEN_${i}@@`, imageTokens[i]);
     }
-    
     return text.replace(/\n/g, '<br/>');
   };
 
@@ -180,7 +184,7 @@ export default function Dashboard({ user, onLogout }) {
 
   const handleSkip = () => {
     setQuestionStatus({ ...questionStatus, [currentQIndex]: 'skipped' });
-    if (currentQIndex < activeTest.questions.length - 1) setCurrentQIndex(currentQIndex + 1);
+    if (activeTest?.questions && currentQIndex < activeTest.questions.length - 1) setCurrentQIndex(currentQIndex + 1);
   };
 
   const handleSubmitTest = async () => {
@@ -189,21 +193,23 @@ export default function Dashboard({ user, onLogout }) {
 
     setTestStatus('processing');
     if(document.fullscreenElement) document.exitFullscreen().catch(e=>{});
-    localStorage.removeItem(`aeo_test_${user.phone || user.uid}`);
+    localStorage.removeItem(`aeo_test_${user?.phone || user?.uid || 'temp'}`);
 
     let marksObtained = 0; let correctCount = 0; let wrongCount = 0;
-    activeTest.questions.forEach((q, index) => {
+    const questionsList = activeTest?.questions || [];
+    
+    questionsList.forEach((q, index) => {
       const studentAns = answers[index];
-      if (studentAns === q.answer) { marksObtained += activeTest.marksPerQuestion; correctCount++; } 
-      else if (studentAns) { marksObtained -= activeTest.negativeMarks; wrongCount++; }
+      if (studentAns && studentAns === q.answer) { marksObtained += (activeTest.marksPerQuestion || 0); correctCount++; } 
+      else if (studentAns) { marksObtained -= (activeTest.negativeMarks || 0); wrongCount++; }
     });
 
-    const totalMarks = activeTest.questions.length * activeTest.marksPerQuestion;
-    const percentage = ((marksObtained / totalMarks) * 100).toFixed(2);
+    const totalMarks = questionsList.length * (activeTest?.marksPerQuestion || 0);
+    const percentage = totalMarks > 0 ? ((marksObtained / totalMarks) * 100).toFixed(2) : 0;
 
     const finalResult = {
-      testId: activeTest.id, studentId: user.uid || user.phone, studentName: user.name,
-      school: user.school, className: user.className, obtainedMarks: marksObtained,
+      testId: activeTest?.id || 'unknown', studentId: user?.uid || user?.phone || 'unknown', studentName: user?.name || 'Unknown',
+      school: user?.school || 'N/A', className: user?.className || 'N/A', obtainedMarks: marksObtained,
       totalMarks: totalMarks, percentage: percentage, correctAnswers: correctCount,
       wrongAnswers: wrongCount, warnings: warnings, submittedAt: new Date().toISOString()
     };
@@ -212,7 +218,7 @@ export default function Dashboard({ user, onLogout }) {
       await addDoc(collection(db, "results"), finalResult);
       setResult(finalResult);
       setTestStatus('submitted');
-    } catch (error) { alert("Error saving result!"); console.error(error); }
+    } catch (error) { alert("Error saving result! Check internet connection."); console.error(error); }
   };
 
   const formatTime = (seconds) => {
@@ -222,7 +228,7 @@ export default function Dashboard({ user, onLogout }) {
 
   const handleReviewClick = () => {
     const now = new Date().getTime();
-    const end = new Date(activeTest.endTime).getTime();
+    const end = new Date(activeTest?.endTime || now).getTime();
     if (now < end) {
       const formattedTime = new Date(activeTest.endTime).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
       alert(`Review will be available after test expires on ${formattedTime}.`);
@@ -233,7 +239,7 @@ export default function Dashboard({ user, onLogout }) {
     return (
       <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans">
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 border-b border-gray-800 pb-4 gap-4">
-          <div><h1 className="text-3xl md:text-5xl font-extrabold text-red-500 tracking-wider">AEO Portal</h1><p className="text-yellow-400 mt-2 text-lg font-semibold">Welcome, {user.name} ({user.className})</p></div>
+          <div><h1 className="text-3xl md:text-5xl font-extrabold text-red-500 tracking-wider">AEO Portal</h1><p className="text-yellow-400 mt-2 text-lg font-semibold">Welcome, {user?.name || 'Student'} ({user?.className || 'Class'})</p></div>
           <button onClick={onLogout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg w-full md:w-auto">Logout</button>
         </div>
 
@@ -248,9 +254,9 @@ export default function Dashboard({ user, onLogout }) {
                 return (
                   <div key={test.id} className="bg-black border-2 border-gray-700 p-6 rounded-2xl flex flex-col justify-between shadow-lg hover:border-blue-500 transition-colors">
                     <div>
-                      <h3 className="text-3xl font-extrabold text-blue-400 mb-2">{test.subject}</h3>
-                      <p className="text-gray-300 text-lg mb-1">Time: {test.durationMinutes} Mins | {test.questions?.length || 0} Qs</p>
-                      <p className="text-gray-400 text-md">Marks: +{test.marksPerQuestion} / -{test.negativeMarks}</p>
+                      <h3 className="text-3xl font-extrabold text-blue-400 mb-2">{test.subject || 'Subject'}</h3>
+                      <p className="text-gray-300 text-lg mb-1">Time: {test.durationMinutes || 0} Mins | {test.questions?.length || 0} Qs</p>
+                      <p className="text-gray-400 text-md">Marks: +{test.marksPerQuestion || 0} / -{test.negativeMarks || 0}</p>
                     </div>
                     <button onClick={() => handleStartTest(test)} className={`mt-6 py-4 px-6 rounded-xl font-extrabold text-xl w-full shadow-lg ${timeStatus.status === 'active' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}>
                       {timeStatus.text}
@@ -266,11 +272,13 @@ export default function Dashboard({ user, onLogout }) {
   }
 
   if (testStatus === 'taking' && activeTest) {
-    const question = activeTest.questions[currentQIndex];
+    const questionsList = activeTest.questions || [];
+    const question = questionsList[currentQIndex] || { question: "Error Loading Question.", options: [] };
+    
     return (
       <div className="min-h-screen bg-black w-full text-white flex flex-col font-sans select-none">
         <div className="bg-gray-900 p-4 border-b-2 border-blue-600 flex flex-wrap justify-between items-center shadow-lg sticky top-0 z-50 gap-4">
-          <h2 className="text-xl md:text-2xl font-bold text-blue-400">{activeTest.subject}</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-blue-400">{activeTest.subject || 'Test'}</h2>
           <div className="flex items-center gap-3">
             <button onClick={() => setLanguage(lang => lang === 'english' ? 'hindi' : 'english')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
               🌐 {language === 'english' ? 'View in Hindi' : 'View in English'}
@@ -283,7 +291,7 @@ export default function Dashboard({ user, onLogout }) {
         </div>
 
         <div className="bg-gray-800 p-4 border-b border-gray-700 flex flex-wrap gap-2 justify-center max-h-40 overflow-y-auto">
-          {activeTest.questions.map((_, idx) => {
+          {questionsList.map((_, idx) => {
             const status = questionStatus[idx] || 'unattempted';
             let btnColor = 'bg-blue-600 border-blue-700'; 
             if (status === 'answered') btnColor = 'bg-green-500 border-green-600';
@@ -295,22 +303,15 @@ export default function Dashboard({ user, onLogout }) {
 
         <div className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full flex flex-col">
           <div className="mb-4 flex justify-between items-end">
-            <span className="text-xl md:text-2xl font-bold text-gray-400">Question {currentQIndex + 1} of {activeTest.questions.length}</span>
+            <span className="text-xl md:text-2xl font-bold text-gray-400">Question {currentQIndex + 1} of {questionsList.length}</span>
             <span className="text-sm text-red-500 font-bold">Warnings: {warnings}/3</span>
           </div>
 
           <div className="bg-gray-900 p-6 md:p-10 rounded-3xl border-2 border-gray-700 shadow-xl mb-6 flex-1 overflow-auto">
-            <h3 
-              className="text-2xl md:text-3xl font-semibold text-yellow-300 mb-8 whitespace-pre-wrap leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: parseText(question.question) }}
-            />
+            <h3 className="text-2xl md:text-3xl font-semibold text-yellow-300 mb-8 whitespace-pre-wrap leading-relaxed" dangerouslySetInnerHTML={{ __html: parseText(question.question) }} />
             <div className="flex flex-col gap-4">
-              {question.options.map((opt, idx) => (
-                <button 
-                  key={idx} onClick={() => handleOptionSelect(opt)}
-                  className={`text-left p-5 md:p-6 rounded-2xl text-xl md:text-2xl font-medium border-2 transition-all duration-200 flex items-start gap-3
-                    ${answers[currentQIndex] === opt ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]' : 'bg-black border-gray-600 text-gray-300 hover:bg-gray-800'}`}
-                >
+              {(question.options || []).map((opt, idx) => (
+                <button key={idx} onClick={() => handleOptionSelect(opt)} className={`text-left p-5 md:p-6 rounded-2xl text-xl md:text-2xl font-medium border-2 transition-all duration-200 flex items-start gap-3 ${answers[currentQIndex] === opt ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]' : 'bg-black border-gray-600 text-gray-300 hover:bg-gray-800'}`}>
                   <span className="font-bold">{String.fromCharCode(65 + idx)}.</span>
                   <span dangerouslySetInnerHTML={{ __html: parseText(opt) }} />
                 </button>
@@ -321,7 +322,7 @@ export default function Dashboard({ user, onLogout }) {
           <div className="flex flex-wrap justify-between items-center bg-gray-900 p-4 rounded-2xl border-2 border-gray-800 gap-4">
             <button disabled={currentQIndex === 0} onClick={() => setCurrentQIndex(prev => prev - 1)} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-xl font-bold text-xl">Previous</button>
             <button onClick={handleSkip} className="px-6 py-3 bg-red-800 hover:bg-red-700 text-white rounded-xl font-bold text-xl">Skip</button>
-            {currentQIndex < activeTest.questions.length - 1 ? (
+            {currentQIndex < questionsList.length - 1 ? (
               <button onClick={() => setCurrentQIndex(prev => prev + 1)} className="px-8 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-xl">Next</button>
             ) : (
               <button onClick={handleSubmitTest} className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xl md:hidden">Submit</button>
@@ -337,14 +338,10 @@ export default function Dashboard({ user, onLogout }) {
       <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 flex items-center justify-center font-sans">
         <div className="bg-gray-900 border-2 border-green-500 rounded-3xl p-8 md:p-12 max-w-3xl w-full text-center shadow-[0_0_40px_rgba(34,197,94,0.3)]">
           <h1 className="text-4xl md:text-5xl font-extrabold text-green-400 mb-4">Test Submitted!</h1>
-          <h2 className="text-2xl text-yellow-400 mb-8">{activeTest.subject}</h2>
+          <h2 className="text-2xl text-yellow-400 mb-8">{activeTest?.subject || 'Test'}</h2>
           <div className="grid grid-cols-2 gap-4 md:gap-6 mb-8 text-left">
-            <div className="bg-black p-6 rounded-2xl border border-gray-700">
-              <p className="text-gray-400 text-lg">Total Score</p><p className="text-4xl font-bold text-blue-400">{result.obtainedMarks} / {result.totalMarks}</p>
-            </div>
-            <div className="bg-black p-6 rounded-2xl border border-gray-700">
-              <p className="text-gray-400 text-lg">Percentage</p><p className="text-4xl font-bold text-yellow-400">{result.percentage}%</p>
-            </div>
+            <div className="bg-black p-6 rounded-2xl border border-gray-700"><p className="text-gray-400 text-lg">Total Score</p><p className="text-4xl font-bold text-blue-400">{result.obtainedMarks} / {result.totalMarks}</p></div>
+            <div className="bg-black p-6 rounded-2xl border border-gray-700"><p className="text-gray-400 text-lg">Percentage</p><p className="text-4xl font-bold text-yellow-400">{result.percentage}%</p></div>
           </div>
           <div className="flex justify-center gap-4">
             <button onClick={handleReviewClick} className="bg-yellow-600 hover:bg-yellow-700 font-bold py-4 px-8 text-xl rounded-xl">Review Answers</button>
@@ -356,6 +353,7 @@ export default function Dashboard({ user, onLogout }) {
   }
 
   if (testStatus === 'review' && activeTest) {
+    const questionsList = activeTest.questions || [];
     return (
       <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans">
         <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4 sticky top-0 bg-black z-10 pt-4">
@@ -363,7 +361,7 @@ export default function Dashboard({ user, onLogout }) {
           <button onClick={() => setTestStatus('submitted')} className="bg-gray-700 hover:bg-gray-600 font-bold py-3 px-8 text-xl rounded-xl">Back</button>
         </div>
         <div className="max-w-4xl mx-auto flex flex-col gap-8">
-          {activeTest.questions.map((q, idx) => {
+          {questionsList.map((q, idx) => {
             const studentAns = answers[idx]; const isCorrect = studentAns === q.answer; const isUnanswered = !studentAns;
             return (
               <div key={idx} className={`bg-gray-900 p-6 md:p-8 rounded-3xl border-l-8 shadow-lg ${isCorrect ? 'border-green-500' : isUnanswered ? 'border-gray-500' : 'border-red-500'}`}>
@@ -371,7 +369,7 @@ export default function Dashboard({ user, onLogout }) {
                   <span>Q{idx + 1}.</span> <span dangerouslySetInnerHTML={{ __html: parseText(q.question) }} />
                 </h3>
                 <div className="flex flex-col gap-3 mb-6">
-                  {q.options.map((opt, oIdx) => {
+                  {(q.options || []).map((opt, oIdx) => {
                     let optStyle = "bg-black border-gray-700 text-gray-400";
                     if (opt === q.answer) optStyle = "bg-green-900 border-green-500 text-green-100 shadow-[0_0_10px_rgba(34,197,94,0.3)]";
                     else if (opt === studentAns && !isCorrect) optStyle = "bg-red-900 border-red-500 text-red-100";
@@ -391,5 +389,10 @@ export default function Dashboard({ user, onLogout }) {
     );
   }
 
-  return null;
+  // Fallback to prevent black screen if stuck in 'processing' state without UI
+  if (testStatus === 'processing') {
+      return <div className="min-h-screen bg-black text-white flex items-center justify-center"><h2 className="text-3xl animate-pulse">Processing Test...</h2></div>
+  }
+
+  return <div className="min-h-screen bg-black text-white flex items-center justify-center"><h2 className="text-3xl text-red-500">Error: Invalid State. Please refresh.</h2></div>;
 }
