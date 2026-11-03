@@ -23,7 +23,7 @@ export default function AdminPanel({ onLogout }) {
   const [appendTest, setAppendTest] = useState('');
   const [appendText, setAppendText] = useState('');
 
-  // ================= GUESS PAPER PRO IMAGE MODAL STATE =================
+  // ================= IMAGE MODAL STATE =================
   const [imgModal, setImgModal] = useState({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   const [imgSettings, setImgSettings] = useState({ brightness: 100, contrast: 100, grayscale: 0 });
   const currentImgRef = useRef(new Image());
@@ -40,7 +40,7 @@ export default function AdminPanel({ onLogout }) {
     setStudents(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
   };
 
-  // ================= GUESS PAPER PRO IMAGE PASTE HANDLER =================
+  // ================= IMAGE PASTE HANDLER =================
   const handleImagePaste = (e, tab) => {
     const items = (e.clipboardData || e.originalEvent?.clipboardData || window.clipboardData).items;
     if (!items) return;
@@ -75,10 +75,10 @@ export default function AdminPanel({ onLogout }) {
     cvs.width = currentImgRef.current.width;
     cvs.height = currentImgRef.current.height;
     
-    ctx.filter = `brightness(${imgSettings.brightness}%) contrast(${imgSettings.contrast}\%) grayscale(${imgSettings.grayscale}%)`;
+    ctx.filter = `brightness(${imgSettings.brightness}%) contrast(${imgSettings.contrast}%) grayscale(${imgSettings.grayscale}%)`;
     ctx.drawImage(currentImgRef.current, 0, 0);
     
-    // Export as highly compressed JPEG
+    // Export as compressed JPEG
     const finalBase64 = cvs.toDataURL('image/jpeg', 0.85); 
     const imgMarkdown = `\n![image](${finalBase64})\n`;
     
@@ -140,6 +140,7 @@ export default function AdminPanel({ onLogout }) {
     }));
   };
 
+  // ================= STRICT DYNAMIC PROMPT =================
   const copyPrompt = () => {
     let langInstruction = "in BOTH English and Hindi (e.g., Eng: [Text]\\nHin: [Text])";
     if (promptLang === 'english') langInstruction = "in ENGLISH ONLY";
@@ -199,8 +200,8 @@ CRITICAL RULES FOR AI:
     } catch (error) { alert(error.message); } finally { setLoading(false); }
   };
 
+  // ================= MANAGE TAB FUNCTIONS =================
   const handleDownloadPDF = async () => {
-    // Result PDF logic remains unchanged...
     if (!resultTest) return alert("Please select a test first.");
     const q = query(collection(db, "results"), where("testId", "==", resultTest));
     const querySnapshot = await getDocs(q);
@@ -223,14 +224,37 @@ CRITICAL RULES FOR AI:
     printWindow.document.close();
   };
 
+  const handleDownloadCSV = () => {
+    const filteredStudents = csvClass === 'All' ? students : students.filter(s => s.className === csvClass);
+    if (filteredStudents.length === 0) return alert("No student data found.");
+    const headers = ["Name", "School", "Class", "WhatsApp", "Joined At"];
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + filteredStudents.map(s => `${s.name},${s.school},${s.className},${s.phone || s.uid},${s.joinedAt}`).join("\n");
+    const link = document.createElement("a");
+    link.href = encodeURI(csvContent);
+    link.download = `AEO_Students_${csvClass.replace(/\s+/g, '_')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDeleteTest = async () => {
+    if (!deleteTest) return alert("Please select a test to delete.");
+    if (window.confirm("Are you absolutely sure you want to delete this test? This cannot be undone.")) {
+      await deleteDoc(doc(db, "tests", deleteTest));
+      alert("Test deleted successfully.");
+      setDeleteTest('');
+      fetchTests();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans relative">
       
-      {/* GUESS PAPER PRO IMAGE MODAL UI */}
+      {/* IMAGE MODAL UI */}
       {imgModal.isOpen && (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4">
           <div className="bg-gray-900 border-2 border-blue-500 rounded-2xl p-6 md:p-10 w-full max-w-2xl shadow-[0_0_40px_rgba(0,0,255,0.4)] flex flex-col items-center">
-            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Adjust & Clean Image</h2>
+            <h2 className="text-2xl font-bold text-yellow-400 mb-6">Adjust Image</h2>
             
             <div className="w-full bg-black rounded-lg overflow-hidden border border-gray-700 flex items-center justify-center p-2 mb-6" style={{ minHeight: '200px' }}>
               <img src={imgModal.src} alt="Preview" style={{ filter: `brightness(${imgSettings.brightness}%) contrast(${imgSettings.contrast}%) grayscale(${imgSettings.grayscale}%)`, maxHeight: '300px' }} className="max-w-full object-contain rounded-md" />
@@ -242,18 +266,18 @@ CRITICAL RULES FOR AI:
             </div>
             
             <div className="w-full mb-4">
-              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Contrast (Clean Text)</span><span className="text-blue-400">{imgSettings.contrast}%</span></label>
+              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Contrast</span><span className="text-blue-400">{imgSettings.contrast}%</span></label>
               <input type="range" min="50" max="200" value={imgSettings.contrast} onChange={(e) => setImgSettings({...imgSettings, contrast: e.target.value})} className="w-full cursor-pointer" />
             </div>
             
             <div className="w-full mb-8">
-              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Grayscale (B&W)</span><span className="text-blue-400">{imgSettings.grayscale}%</span></label>
+              <label className="text-gray-300 font-bold mb-2 flex justify-between"><span>Grayscale</span><span className="text-blue-400">{imgSettings.grayscale}%</span></label>
               <input type="range" min="0" max="100" value={imgSettings.grayscale} onChange={(e) => setImgSettings({...imgSettings, grayscale: e.target.value})} className="w-full cursor-pointer" />
             </div>
 
             <div className="flex gap-4 w-full">
               <button onClick={() => setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 })} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl text-lg">Cancel</button>
-              <button onClick={insertProcessedImage} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg shadow-[0_0_15px_rgba(34,197,94,0.4)]">✅ Insert Image</button>
+              <button onClick={insertProcessedImage} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl text-lg shadow-[0_0_15px_rgba(34,197,94,0.4)]">✅ Insert</button>
             </div>
           </div>
         </div>
@@ -272,6 +296,7 @@ CRITICAL RULES FOR AI:
 
       <div className="bg-gray-900 border-2 border-gray-700 rounded-3xl p-6 md:p-10 shadow-2xl">
         
+        {/* ================= TAB 1: GENERATE TEST ================= */}
         {activeTab === 'generate' && (
           <div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -340,16 +365,39 @@ CRITICAL RULES FOR AI:
           </div>
         )}
 
-        {/* ================= TAB 2 & 3 REMAIN UNCHANGED ================= */}
+        {/* ================= TAB 2: APPEND ================= */}
         {activeTab === 'append' && (
           <div>
-            {/* Same as before for append */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="w-full">
+                <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class</label>
+                <select value={appendClass} onChange={(e) => setAppendClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                  <option value="" disabled>Select Class</option>
+                  {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                </select>
+              </div>
+              <div className="w-full">
+                <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test to Expand</label>
+                <select value={appendTest} onChange={(e) => setAppendTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full cursor-pointer">
+                  <option value="" disabled>Select Test</option>
+                  {tests.filter(t => t.className === appendClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
+                </select>
+              </div>
+            </div>
+
             <div className="w-full mb-6">
               <label className="text-green-400 text-sm font-bold mb-2 block">
                 Paste Custom Text Format here (Right-Click & Paste / Ctrl+V to open Image Editor!)
               </label>
-              <textarea rows="8" value={appendText} onChange={(e) => setAppendText(e.target.value)} onPaste={(e) => handleImagePaste(e, 'append')} className="p-5 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-green-500"></textarea>
+              <textarea 
+                rows="8" 
+                value={appendText} 
+                onChange={(e) => setAppendText(e.target.value)} 
+                onPaste={(e) => handleImagePaste(e, 'append')}
+                className="p-5 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-2xl outline-none w-full font-mono resize-none focus:border-green-500"
+              ></textarea>
             </div>
+
             <div className="flex justify-between items-center">
               <button onClick={copyPrompt} className="text-blue-400 underline hover:text-blue-300 text-lg font-bold">Copy Prompt</button>
               <button onClick={handleAddMoreQuestions} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-extrabold text-xl py-4 px-10 rounded-xl">
@@ -359,20 +407,69 @@ CRITICAL RULES FOR AI:
           </div>
         )}
 
+        {/* ================= TAB 3: MANAGE ================= */}
         {activeTab === 'manage' && (
           <div className="grid grid-cols-1 gap-10">
+            
+            {/* 1. PDF Result Generator */}
             <div className="bg-gray-800 border-l-4 border-yellow-500 p-8 rounded-2xl shadow-lg">
               <h3 className="text-3xl font-extrabold text-yellow-400 mb-6">🏆 Result PDF Generator</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
                 <div className="w-full">
-                  <select value={resultClass} onChange={(e) => setResultClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full"><option value="" disabled>Select Class</option>{classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}</select>
+                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class</label>
+                  <select value={resultClass} onChange={(e) => setResultClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
+                    <option value="" disabled>Select Class</option>
+                    {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                  </select>
                 </div>
                 <div className="w-full">
-                  <select value={resultTest} onChange={(e) => setResultTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full"><option value="" disabled>Select Test</option>{tests.filter(t => t.className === resultClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}</select>
+                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test</label>
+                  <select value={resultTest} onChange={(e) => setResultTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
+                    <option value="" disabled>Select Test</option>
+                    {tests.filter(t => t.className === resultClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
+                  </select>
                 </div>
                 <button onClick={handleDownloadPDF} className="w-full md:w-auto bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Generate PDF</button>
               </div>
             </div>
+
+            {/* 2. CSV Export */}
+            <div className="bg-gray-800 border-l-4 border-blue-500 p-8 rounded-2xl shadow-lg">
+              <h3 className="text-3xl font-extrabold text-blue-400 mb-6">📊 Export Student Database</h3>
+              <div className="flex flex-col md:flex-row gap-6 items-end">
+                <div className="w-full md:w-2/3">
+                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class to Export</label>
+                  <select value={csvClass} onChange={(e) => setCsvClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
+                    <option value="All">All Classes</option>
+                    {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                  </select>
+                </div>
+                <button onClick={handleDownloadCSV} className="w-full md:w-1/3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Download CSV</button>
+              </div>
+            </div>
+
+            {/* 3. Delete Test */}
+            <div className="bg-gray-800 border-l-4 border-red-500 p-8 rounded-2xl shadow-lg">
+              <h3 className="text-3xl font-extrabold text-red-500 mb-6">🗑️ Permanently Delete Test</h3>
+              <div className="flex flex-col md:flex-row gap-6 items-end">
+                <div className="w-full">
+                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Class</label>
+                  <select value={deleteClass} onChange={(e) => setDeleteClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
+                    <option value="" disabled>Select Class</option>
+                    {classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+                  </select>
+                </div>
+                <div className="w-full">
+                  <label className="text-gray-300 text-sm font-bold mb-2 block">Select Test</label>
+                  <select value={deleteTest} onChange={(e) => setDeleteTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full">
+                    <option value="" disabled>Select Test</option>
+                    {tests.filter(t => t.className === deleteClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}
+                  </select>
+                </div>
+                <button onClick={handleDeleteTest} className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Delete Test</button>
+              </div>
+            </div>
+
           </div>
         )}
       </div>
