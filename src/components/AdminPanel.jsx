@@ -30,13 +30,17 @@ export default function AdminPanel({ onLogout }) {
   useEffect(() => { fetchTests(); fetchStudents(); }, []);
 
   const fetchTests = async () => {
-    const querySnapshot = await getDocs(collection(db, "tests"));
-    setTests(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    try {
+        const querySnapshot = await getDocs(collection(db, "tests"));
+        setTests(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch(e) { console.error(e); }
   };
 
   const fetchStudents = async () => {
-    const querySnapshot = await getDocs(collection(db, "students"));
-    setStudents(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    try {
+        const querySnapshot = await getDocs(collection(db, "students"));
+        setStudents(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch(e) { console.error(e); }
   };
 
   // ================= IMAGE COMPRESSOR (FIXES FIREBASE 1MB CRASH) =================
@@ -99,7 +103,7 @@ export default function AdminPanel({ onLogout }) {
 
   // ================= UNIVERSAL HYBRID PARSER =================
   const parseCustomFormat = (rawText) => {
-    const lines = rawText.split('\n');
+    const lines = String(rawText).split('\n');
     const questions = [];
     let currentQ = null;
     let currentMode = '';
@@ -111,7 +115,6 @@ export default function AdminPanel({ onLogout }) {
       if (trimmed.endsWith('\\')) trimmed = trimmed.slice(0, -1).trim();
       if (!trimmed) return; 
 
-      // 1. PROSPECTUS FORMAT MATCH (@, @@@, @@)
       if (trimmed.startsWith('@@@')) {
           if (!currentQ) return;
           optCount++;
@@ -127,7 +130,6 @@ export default function AdminPanel({ onLogout }) {
           currentQ = { q: cleanQ, o1: '', o2: '', o3: '', o4: '', ans: '', exp: '' };
           optCount = 0; currentMode = 'q';
       } 
-      // 2. OLD FORMAT MATCH (# Q1, #1)
       else if (trimmed.startsWith('#') && !/^#\d/.test(trimmed)) {
         if (currentQ) questions.push(currentQ);
         let cleanQ = trimmed.substring(1).trim().replace(/^(Q(uestion)?\s*\d+[\.\:\-]?\s*)/i, '');
@@ -150,14 +152,13 @@ export default function AdminPanel({ onLogout }) {
     if(questions.length === 0) throw new Error("No valid questions found! Start questions with '@' or '# Q1'.");
 
     return questions.map(q => ({
-      question: q.q.trim(),
-      options: [q.o1.trim(), q.o2.trim(), q.o3.trim(), q.o4.trim()].filter(Boolean),
-      answer: q.ans.trim(),
-      review: q.exp.trim()
+      question: (q.q || '').trim(),
+      options: [(q.o1 || '').trim(), (q.o2 || '').trim(), (q.o3 || '').trim(), (q.o4 || '').trim()].filter(Boolean),
+      answer: (q.ans || '').trim(),
+      review: (q.exp || '').trim()
     }));
   };
 
-  // ================= PROSPECTUS MAKER AI PROMPT =================
   const copyPrompt = () => {
     let langInstruction = "in BOTH English and Hindi (e.g., Eng: [Text]\\nHin: [Text])";
     if (promptLang === 'english') langInstruction = "in ENGLISH ONLY";
@@ -215,7 +216,6 @@ Output Format Example:
     } catch (error) { alert(error.message); } finally { setLoading(false); }
   };
 
-  // ================= MANAGE TAB FUNCTIONS =================
   const handleDownloadPDF = async () => {
     if (!resultTest) return alert("Please select a test first.");
     const q = query(collection(db, "results"), where("testId", "==", resultTest));
@@ -379,7 +379,6 @@ Output Format Example:
           </div>
         )}
 
-        {/* ================= TAB 2: APPEND ================= */}
         {activeTab === 'append' && (
           <div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -421,7 +420,6 @@ Output Format Example:
           </div>
         )}
 
-        {/* ================= TAB 3: MANAGE ================= */}
         {activeTab === 'manage' && (
           <div className="grid grid-cols-1 gap-10">
             <div className="bg-gray-800 border-l-4 border-yellow-500 p-8 rounded-2xl shadow-lg">
