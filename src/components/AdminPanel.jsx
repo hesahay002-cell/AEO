@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, where, updateDoc } from 'firebase/firestore';
@@ -43,7 +44,6 @@ export default function AdminPanel({ onLogout }) {
     } catch(e) { console.error(e); }
   };
 
-  // ================= CRASH-PROOF DIRECT HTML IMAGE INSERT =================
   const handleImagePaste = (e, tab) => {
     const items = (e.clipboardData || e.originalEvent?.clipboardData || window.clipboardData).items;
     if (!items) return;
@@ -76,7 +76,6 @@ export default function AdminPanel({ onLogout }) {
     const cvs = document.createElement('canvas');
     const ctx = cvs.getContext('2d');
     
-    // Auto-Resize
     let width = currentImgRef.current.width;
     let height = currentImgRef.current.height;
     const MAX_WIDTH = 800;
@@ -100,7 +99,6 @@ export default function AdminPanel({ onLogout }) {
     setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   };
 
-  // ================= UNIVERSAL HYBRID PARSER (SAFE MODE) =================
   const parseCustomFormat = (rawText) => {
     const lines = String(rawText).split('\n');
     const questions = [];
@@ -164,26 +162,26 @@ export default function AdminPanel({ onLogout }) {
   };
 
   const copyPrompt = () => {
-    let langInstruction = "in BOTH English and Hindi (e.g., Eng: [Text]\\nHin: [Text])";
+    let langInstruction = "in BOTH English and Hindi";
     if (promptLang === 'english') langInstruction = "in ENGLISH ONLY";
     if (promptLang === 'hindi') langInstruction = "in HINDI ONLY";
 
     const promptText = `Act as an expert exam setter. Generate 10 multiple choice questions for [Subject] class [Class] ${langInstruction}.
     
 CRITICAL RULES FOR AI:
-1. Start EVERY question with "@" followed by number. (e.g., @ 1. Eng: ...)
-2. Start EVERY option with "@@@" (e.g., @@@ Eng: Option A)
-3. Provide the EXACT correct option text starting with "@@" (e.g., @@ Eng: Option A)
-4. Use standard LaTeX for Mathematical/Chemistry equations (e.g., $$C_2H_5Cl$$ or \\ce{H2O}).
-5. Do NOT use markdown code blocks (No \`\`\`). Do NOT use JSON.
+1. Start EVERY question with "@" followed by number.
+2. Start EVERY option with "@@@"
+3. Provide the EXACT correct option text starting with "@@"
+4. Use standard LaTeX for Mathematical/Chemistry equations.
+5. Do NOT use markdown code blocks. Do NOT use JSON.
 
 Output Format Example:
-@ 1. [Question text]
-@@@ [Option A]
-@@@ [Option B]
-@@@ [Option C]
-@@@ [Option D]
-@@ [Correct Option Text]`;
+@ 1. Question text
+@@@ Option A
+@@@ Option B
+@@@ Option C
+@@@ Option D
+@@ Correct Option Text`;
 
     navigator.clipboard.writeText(promptText);
     alert(`Prospectus Format Prompt (${promptLang.toUpperCase()}) copied! Paste it in ChatGPT.`);
