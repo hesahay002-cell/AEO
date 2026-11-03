@@ -30,17 +30,38 @@ export default function Dashboard({ user, onLogout }) {
     }
   };
 
-  // ================= FIXED MATHJAX TIMING =================
+  // ================= 100% BULLETPROOF MATHJAX LOADER =================
   useEffect(() => {
-    if (window.MathJax && (testStatus === 'taking' || testStatus === 'review')) {
-      // 100ms delay ensures React has injected the text into the DOM before MathJax runs
-      const timeoutId = setTimeout(() => {
-        window.MathJax.typesetPromise().catch((err) => console.log("MathJax Error:", err));
-      }, 100);
-      return () => clearTimeout(timeoutId);
+    const renderMath = () => {
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        setTimeout(() => {
+          try {
+            // Force MathJax to clear cache and rescan the new React DOM
+            if (window.MathJax.typesetClear) window.MathJax.typesetClear();
+            window.MathJax.typesetPromise().catch((err) => console.log("Math Error", err));
+          } catch(e) {}
+        }, 300);
+      }
+    };
+
+    if (testStatus === 'taking' || testStatus === 'review') {
+      if (!window.MathJax) {
+        window.MathJax = {
+          tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+          startup: { typeset: false }
+        };
+        const script = document.createElement('script');
+        script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
+        script.async = true;
+        script.onload = renderMath;
+        document.head.appendChild(script);
+      } else {
+        renderMath();
+      }
     }
   }, [currentQIndex, language, testStatus, activeTest]);
 
+  // ================= TEST SECURITY =================
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (testStatus === 'taking') {
@@ -54,9 +75,7 @@ export default function Dashboard({ user, onLogout }) {
 
   useEffect(() => {
     if (testStatus === 'taking' && activeTest) {
-      const sessionData = {
-        testId: activeTest.id, timeLeft, answers, questionStatus, currentQIndex, warnings, language
-      };
+      const sessionData = { testId: activeTest.id, timeLeft, answers, questionStatus, currentQIndex, warnings, language };
       localStorage.setItem(`aeo_test_${user.phone || user.uid}`, JSON.stringify(sessionData));
     }
   }, [timeLeft, answers, questionStatus, currentQIndex, warnings, language, testStatus, activeTest]);
@@ -76,7 +95,7 @@ export default function Dashboard({ user, onLogout }) {
       if (document.hidden && testStatus === 'taking') {
         setWarnings(prev => {
           const newCount = prev + 1;
-          if (newCount < 3) alert(`WARNING ${newCount}/3: Window switching or minimizing is not allowed! Your test will auto-submit on the 3rd warning.`);
+          if (newCount < 3) alert(`WARNING ${newCount}/3: Window switching is not allowed! Auto-submit on 3rd warning.`);
           return newCount;
         });
       }
@@ -87,7 +106,7 @@ export default function Dashboard({ user, onLogout }) {
 
   useEffect(() => {
     if (warnings >= 3 && testStatus === 'taking') {
-      alert("🚨 MAXIMUM WARNINGS REACHED! You violated the rules 3 times. Test is automatically submitting.");
+      alert("🚨 MAXIMUM WARNINGS REACHED! Auto-submitting test.");
       handleSubmitTest();
     }
   }, [warnings, testStatus]);
@@ -110,50 +129,60 @@ export default function Dashboard({ user, onLogout }) {
     if (savedSessionStr) {
       const savedSession = JSON.parse(savedSessionStr);
       if (savedSession.testId === test.id) {
-         setActiveTest(test);
-         setTimeLeft(savedSession.timeLeft);
-         setAnswers(savedSession.answers || {});
-         setQuestionStatus(savedSession.questionStatus || {});
-         setCurrentQIndex(savedSession.currentQIndex || 0);
-         setWarnings(savedSession.warnings || 0);
-         setLanguage(savedSession.language || 'english');
-         setTestStatus('taking');
+         setActiveTest(test); setTimeLeft(savedSession.timeLeft); setAnswers(savedSession.answers || {});
+         setQuestionStatus(savedSession.questionStatus || {}); setCurrentQIndex(savedSession.currentQIndex || 0);
+         setWarnings(savedSession.warnings || 0); setLanguage(savedSession.language || 'english'); setTestStatus('taking');
          if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>console.log(e));
          return; 
       }
     }
 
-    setActiveTest(test);
-    setTimeLeft(test.durationMinutes * 60);
-    setAnswers({});
-    setQuestionStatus({});
-    setCurrentQIndex(0);
-    setWarnings(0);
-    setLanguage('english');
-    setTestStatus('taking');
-    
+    setActiveTest(test); setTimeLeft(test.durationMinutes * 60); setAnswers({});
+    setQuestionStatus({}); setCurrentQIndex(0); setWarnings(0); setLanguage('english'); setTestStatus('taking');
     if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>console.log(e));
   };
 
+  // ================= NEW ADVANCED PARSER (SAVES PRE-PASTED IMAGES) =================
   const parseText = (text) => {
     if (!text) return "";
+    
+    // Auto-fix arrow tags without brackets
     let cleanText = text.replace(/\\xrightarrow(?!\s*\{)/g, '\\rightarrow');
-    const engMatch = cleanText.match(/Eng:\s*([\s\S]*?)(?=Hin:|$)/i);
-    const hinMatch = cleanText.match(/Hin:\s*([\s\S]*?)$/i);
+    
+    const hasEng = /Eng:/i.test(cleanText);
+    const hasHin = /Hin:/i.test(cleanText);
 
-    if (engMatch || hinMatch) {
-      let engPart = engMatch ? engMatch[1].trim() : cleanText.replace(/Hin:[\s\S]*/i, '').trim();
-      let hinPart = hinMatch ? hinMatch[1].trim() : engPart;
-      engPart = engPart.replace(/^Eng:\s*/i, '');
-      hinPart = hinPart.replace(/^Hin:\s*/i, '');
-      return language === 'english' ? engPart : hinPart;
+    if (hasEng || hasHin) {
+      // Find where language text starts to protect common content (like Images)
+      const engIndex = hasEng ? cleanText.search(/Eng:/i) : Infinity;
+      const hinIndex = hasHin ? cleanText.search(/Hin:/i) : Infinity;
+      const firstTagIndex = Math.min(engIndex, hinIndex);
+      
+      let sharedText = ""; // Holds the Image Tag pasted before Eng:
+      if (firstTagIndex > 0) {
+        sharedText = cleanText.substring(0, firstTagIndex).trim();
+      }
+
+      const engMatch = cleanText.match(/Eng:\s*([\s\S]*?)(?=Hin:|$)/i);
+      const hinMatch = cleanText.match(/Hin:\s*([\s\S]*?)$/i);
+
+      let engPart = engMatch ? engMatch[1].trim() : '';
+      let hinPart = hinMatch ? hinMatch[1].trim() : '';
+
+      if (!engPart && hinPart) engPart = hinPart;
+      if (!hinPart && engPart) hinPart = engPart;
+
+      const selectedLangText = language === 'english' ? engPart : hinPart;
+      
+      // Return Image Code + Translated Text
+      return sharedText ? `${sharedText}<br/><br/>${selectedLangText}` : selectedLangText;
     }
 
     if (cleanText.includes(" / ")) {
       const parts = cleanText.split(" / ");
       return language === 'english' ? parts[0].trim() : (parts[1] ? parts[1].trim() : parts[0].trim());
     }
-    return cleanText.replace(/^Eng:\s*/i, '').replace(/^Hin:\s*/i, '');
+    return cleanText;
   };
 
   const handleOptionSelect = (opt) => {
@@ -213,7 +242,7 @@ export default function Dashboard({ user, onLogout }) {
       const formattedTime = new Date(activeTest.endTime).toLocaleString('en-IN', {
         day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
       });
-      alert(`Review and Answer Key will be available after the test expires on ${formattedTime}.`);
+      alert(`Review will be available after test expires on ${formattedTime}.`);
     } else {
       setTestStatus('review');
     }
@@ -223,19 +252,14 @@ export default function Dashboard({ user, onLogout }) {
     return (
       <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans">
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 border-b border-gray-800 pb-4 gap-4">
-          <div>
-            <h1 className="text-3xl md:text-5xl font-extrabold text-red-500 tracking-wider">AEO Portal</h1>
-            <p className="text-yellow-400 mt-2 text-lg font-semibold">Welcome, {user.name} ({user.className})</p>
-          </div>
+          <div><h1 className="text-3xl md:text-5xl font-extrabold text-red-500 tracking-wider">AEO Portal</h1><p className="text-yellow-400 mt-2 text-lg font-semibold">Welcome, {user.name} ({user.className})</p></div>
           <button onClick={onLogout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg w-full md:w-auto">Logout</button>
         </div>
 
         <div className="bg-gray-900 border-2 border-blue-900 rounded-3xl p-6 md:p-10 shadow-2xl">
           <h2 className="text-3xl text-yellow-400 font-bold mb-8">Available Tests for You</h2>
           {availableTests.length === 0 ? (
-            <div className="text-center p-10 border-2 border-dashed border-gray-700 rounded-2xl">
-              <p className="text-gray-400 text-2xl">No tests are currently assigned to your class.</p>
-            </div>
+            <div className="text-center p-10 border-2 border-dashed border-gray-700 rounded-2xl"><p className="text-gray-400 text-2xl">No tests are currently assigned to your class.</p></div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {availableTests.map((test) => {
@@ -246,12 +270,8 @@ export default function Dashboard({ user, onLogout }) {
                       <h3 className="text-3xl font-extrabold text-blue-400 mb-2">{test.subject}</h3>
                       <p className="text-gray-300 text-lg mb-1">Time: {test.durationMinutes} Mins | {test.questions?.length || 0} Qs</p>
                       <p className="text-gray-400 text-md">Marks: +{test.marksPerQuestion} / -{test.negativeMarks}</p>
-                      <div className="mt-4 p-3 bg-gray-800 rounded-xl text-sm text-gray-300">
-                        <p>Starts: {new Date(test.startTime).toLocaleString()}</p>
-                        <p>Ends: {new Date(test.endTime).toLocaleString()}</p>
-                      </div>
                     </div>
-                    <button onClick={() => handleStartTest(test)} className={`mt-6 py-4 px-6 rounded-xl font-extrabold text-xl w-full shadow-lg transition-transform active:scale-95 ${timeStatus.status === 'active' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}>
+                    <button onClick={() => handleStartTest(test)} className={`mt-6 py-4 px-6 rounded-xl font-extrabold text-xl w-full shadow-lg ${timeStatus.status === 'active' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}>
                       {timeStatus.text}
                     </button>
                   </div>
@@ -277,7 +297,7 @@ export default function Dashboard({ user, onLogout }) {
             <div className={`text-xl md:text-3xl font-extrabold px-4 py-1 rounded-xl shadow-inner ${timeLeft < 300 ? 'bg-red-900 text-red-100 animate-pulse' : 'bg-gray-800 text-yellow-400'}`}>
               ⏱ {formatTime(timeLeft)}
             </div>
-            <button onClick={handleSubmitTest} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg hidden md:block">Submit Test</button>
+            <button onClick={handleSubmitTest} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg hidden md:block">Submit</button>
           </div>
         </div>
 
@@ -298,7 +318,7 @@ export default function Dashboard({ user, onLogout }) {
             <span className="text-sm text-red-500 font-bold">Warnings: {warnings}/3</span>
           </div>
 
-          <div className="bg-gray-900 p-6 md:p-10 rounded-3xl border-2 border-gray-700 shadow-xl mb-6 flex-1">
+          <div className="bg-gray-900 p-6 md:p-10 rounded-3xl border-2 border-gray-700 shadow-xl mb-6 flex-1 overflow-auto">
             <h3 
               className="text-2xl md:text-3xl font-semibold text-yellow-300 mb-8 whitespace-pre-wrap leading-relaxed latex-content"
               dangerouslySetInnerHTML={{ __html: parseText(question.question) }}
@@ -339,21 +359,15 @@ export default function Dashboard({ user, onLogout }) {
           <h2 className="text-2xl text-yellow-400 mb-8">{activeTest.subject}</h2>
           <div className="grid grid-cols-2 gap-4 md:gap-6 mb-8 text-left">
             <div className="bg-black p-6 rounded-2xl border border-gray-700">
-              <p className="text-gray-400 text-lg">Total Score</p><p className="text-4xl font-bold text-blue-400">{result.obtainedMarks} <span className="text-xl text-gray-500">/ {result.totalMarks}</span></p>
+              <p className="text-gray-400 text-lg">Total Score</p><p className="text-4xl font-bold text-blue-400">{result.obtainedMarks} / {result.totalMarks}</p>
             </div>
             <div className="bg-black p-6 rounded-2xl border border-gray-700">
               <p className="text-gray-400 text-lg">Percentage</p><p className="text-4xl font-bold text-yellow-400">{result.percentage}%</p>
             </div>
-            <div className="bg-black p-6 rounded-2xl border border-gray-700">
-              <p className="text-gray-400 text-lg">Correct Answers</p><p className="text-3xl font-bold text-green-500">{result.correctAnswers}</p>
-            </div>
-            <div className="bg-black p-6 rounded-2xl border border-gray-700">
-              <p className="text-gray-400 text-lg">Wrong Answers</p><p className="text-3xl font-bold text-red-500">{result.wrongAnswers}</p>
-            </div>
           </div>
-          <div className="flex flex-col md:flex-row gap-4 justify-center">
-            <button onClick={handleReviewClick} className="bg-yellow-600 hover:bg-yellow-700 font-bold py-4 px-8 text-xl rounded-xl w-full md:w-auto">Review Answers</button>
-            <button onClick={() => {setTestStatus('dashboard'); setActiveTest(null);}} className="bg-blue-600 hover:bg-blue-700 font-bold py-4 px-8 text-xl rounded-xl w-full md:w-auto">Back to Dashboard</button>
+          <div className="flex justify-center gap-4">
+            <button onClick={handleReviewClick} className="bg-yellow-600 hover:bg-yellow-700 font-bold py-4 px-8 text-xl rounded-xl">Review Answers</button>
+            <button onClick={() => {setTestStatus('dashboard'); setActiveTest(null);}} className="bg-blue-600 hover:bg-blue-700 font-bold py-4 px-8 text-xl rounded-xl">Dashboard</button>
           </div>
         </div>
       </div>
@@ -364,7 +378,7 @@ export default function Dashboard({ user, onLogout }) {
     return (
       <div className="min-h-screen bg-black w-full text-white p-4 md:p-8 font-sans">
         <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4 sticky top-0 bg-black z-10 pt-4">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-yellow-400">Answer Key & Review</h1>
+          <h1 className="text-3xl md:text-4xl font-extrabold text-yellow-400">Review</h1>
           <button onClick={() => setTestStatus('submitted')} className="bg-gray-700 hover:bg-gray-600 font-bold py-3 px-8 text-xl rounded-xl">Back</button>
         </div>
         <div className="max-w-4xl mx-auto flex flex-col gap-8">
@@ -388,12 +402,6 @@ export default function Dashboard({ user, onLogout }) {
                     );
                   })}
                 </div>
-                {q.review && (
-                  <div className="mt-4 p-5 bg-blue-900/30 border border-blue-800 rounded-xl">
-                    <p className="text-blue-300 font-bold mb-2">Explanation:</p>
-                    <p dangerouslySetInnerHTML={{ __html: parseText(q.review) }} className="text-gray-300 text-lg latex-content" />
-                  </div>
-                )}
               </div>
             );
           })}
