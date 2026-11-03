@@ -15,28 +15,22 @@ export default function Dashboard({ user, onLogout }) {
   const [result, setResult] = useState(null);
   const [language, setLanguage] = useState('english');
 
-  useEffect(() => {
-    fetchTests();
-  }, [user]);
+  useEffect(() => { fetchTests(); }, [user]);
 
   const fetchTests = async () => {
     try {
       const q = query(collection(db, "tests"), where("className", "==", user.className));
       const querySnapshot = await getDocs(q);
-      const fetchedTests = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAvailableTests(fetchedTests);
-    } catch (error) {
-      console.error("Error fetching tests: ", error);
-    }
+      setAvailableTests(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) { console.error(error); }
   };
 
-  // ================= 100% BULLETPROOF MATHJAX LOADER =================
+  // ================= PROSPECTUS MAKER MATHJAX LOADER (mhchem support) =================
   useEffect(() => {
     const renderMath = () => {
       if (window.MathJax && window.MathJax.typesetPromise) {
         setTimeout(() => {
           try {
-            // Force MathJax to clear cache and rescan the new React DOM
             if (window.MathJax.typesetClear) window.MathJax.typesetClear();
             window.MathJax.typesetPromise().catch((err) => console.log("Math Error", err));
           } catch(e) {}
@@ -47,7 +41,12 @@ export default function Dashboard({ user, onLogout }) {
     if (testStatus === 'taking' || testStatus === 'review') {
       if (!window.MathJax) {
         window.MathJax = {
-          tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+          tex: { 
+            inlineMath: [['$', '$'], ['\\(', '\\)']],
+            displayMath: [['$$', '$$'], ['\\[', '\\]']],
+            packages: {'[+]': ['mhchem']} // Chemistry Support
+          },
+          loader: {load: ['[tex]/mhchem']},
           startup: { typeset: false }
         };
         const script = document.createElement('script');
@@ -64,10 +63,7 @@ export default function Dashboard({ user, onLogout }) {
   // ================= TEST SECURITY =================
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      if (testStatus === 'taking') {
-        e.preventDefault();
-        e.returnValue = "Test is running. Are you sure you want to exit?";
-      }
+      if (testStatus === 'taking') { e.preventDefault(); e.returnValue = ""; }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
@@ -75,18 +71,14 @@ export default function Dashboard({ user, onLogout }) {
 
   useEffect(() => {
     if (testStatus === 'taking' && activeTest) {
-      const sessionData = { testId: activeTest.id, timeLeft, answers, questionStatus, currentQIndex, warnings, language };
-      localStorage.setItem(`aeo_test_${user.phone || user.uid}`, JSON.stringify(sessionData));
+      localStorage.setItem(`aeo_test_${user.phone || user.uid}`, JSON.stringify({ testId: activeTest.id, timeLeft, answers, questionStatus, currentQIndex, warnings, language }));
     }
   }, [timeLeft, answers, questionStatus, currentQIndex, warnings, language, testStatus, activeTest]);
 
   useEffect(() => {
     let timer;
-    if (testStatus === 'taking' && timeLeft > 0) {
-      timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
-    } else if (testStatus === 'taking' && timeLeft === 0) {
-      handleSubmitTest();
-    }
+    if (testStatus === 'taking' && timeLeft > 0) timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+    else if (testStatus === 'taking' && timeLeft === 0) handleSubmitTest();
     return () => clearInterval(timer);
   }, [testStatus, timeLeft]);
 
@@ -104,26 +96,12 @@ export default function Dashboard({ user, onLogout }) {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [testStatus]);
 
-  useEffect(() => {
-    if (warnings >= 3 && testStatus === 'taking') {
-      alert("🚨 MAXIMUM WARNINGS REACHED! Auto-submitting test.");
-      handleSubmitTest();
-    }
-  }, [warnings, testStatus]);
-
-  const checkTimeStatus = (startTime, endTime) => {
-    const now = new Date().getTime();
-    const start = new Date(startTime).getTime();
-    const end = new Date(endTime).getTime();
-    if (now < start) return { status: 'upcoming', text: 'Upcoming' };
-    if (now > end) return { status: 'expired', text: 'Expired' };
-    return { status: 'active', text: 'Start Test' };
-  };
+  useEffect(() => { if (warnings >= 3 && testStatus === 'taking') { handleSubmitTest(); } }, [warnings, testStatus]);
 
   const handleStartTest = (test) => {
-    const timeStatus = checkTimeStatus(test.startTime, test.endTime);
-    if (timeStatus.status === 'upcoming') return alert("This test has not started yet.");
-    if (timeStatus.status === 'expired') return alert("This test has expired.");
+    const now = new Date().getTime();
+    if (now < new Date(test.startTime).getTime()) return alert("This test has not started yet.");
+    if (now > new Date(test.endTime).getTime()) return alert("This test has expired.");
     
     const savedSessionStr = localStorage.getItem(`aeo_test_${user.phone || user.uid}`);
     if (savedSessionStr) {
@@ -132,57 +110,65 @@ export default function Dashboard({ user, onLogout }) {
          setActiveTest(test); setTimeLeft(savedSession.timeLeft); setAnswers(savedSession.answers || {});
          setQuestionStatus(savedSession.questionStatus || {}); setCurrentQIndex(savedSession.currentQIndex || 0);
          setWarnings(savedSession.warnings || 0); setLanguage(savedSession.language || 'english'); setTestStatus('taking');
-         if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>console.log(e));
+         if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>{});
          return; 
       }
     }
-
-    setActiveTest(test); setTimeLeft(test.durationMinutes * 60); setAnswers({});
-    setQuestionStatus({}); setCurrentQIndex(0); setWarnings(0); setLanguage('english'); setTestStatus('taking');
-    if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>console.log(e));
+    setActiveTest(test); setTimeLeft(test.durationMinutes * 60); setAnswers({}); setQuestionStatus({});
+    setCurrentQIndex(0); setWarnings(0); setLanguage('english'); setTestStatus('taking');
+    if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(e=>{});
   };
 
-  // ================= NEW ADVANCED PARSER (SAVES PRE-PASTED IMAGES) =================
-  const parseText = (text) => {
-    if (!text) return "";
-    
-    // Auto-fix arrow tags without brackets
-    let cleanText = text.replace(/\\xrightarrow(?!\s*\{)/g, '\\rightarrow');
-    
-    const hasEng = /Eng:/i.test(cleanText);
-    const hasHin = /Hin:/i.test(cleanText);
+  // ================= PROSPECTUS MAKER PARSER (Image Tokenizer & inlineMath) =================
+  const parseText = (rawText) => {
+    if (!rawText) return "";
+    let text = rawText;
+
+    // Extract Eng/Hin first
+    const hasEng = /Eng:/i.test(text);
+    const hasHin = /Hin:/i.test(text);
 
     if (hasEng || hasHin) {
-      // Find where language text starts to protect common content (like Images)
-      const engIndex = hasEng ? cleanText.search(/Eng:/i) : Infinity;
-      const hinIndex = hasHin ? cleanText.search(/Hin:/i) : Infinity;
+      const engIndex = hasEng ? text.search(/Eng:/i) : Infinity;
+      const hinIndex = hasHin ? text.search(/Hin:/i) : Infinity;
       const firstTagIndex = Math.min(engIndex, hinIndex);
       
-      let sharedText = ""; // Holds the Image Tag pasted before Eng:
-      if (firstTagIndex > 0) {
-        sharedText = cleanText.substring(0, firstTagIndex).trim();
-      }
+      let sharedText = ""; 
+      if (firstTagIndex > 0) sharedText = text.substring(0, firstTagIndex).trim();
 
-      const engMatch = cleanText.match(/Eng:\s*([\s\S]*?)(?=Hin:|$)/i);
-      const hinMatch = cleanText.match(/Hin:\s*([\s\S]*?)$/i);
+      const engMatch = text.match(/Eng:\s*([\s\S]*?)(?=Hin:|$)/i);
+      const hinMatch = text.match(/Hin:\s*([\s\S]*?)$/i);
 
       let engPart = engMatch ? engMatch[1].trim() : '';
       let hinPart = hinMatch ? hinMatch[1].trim() : '';
-
       if (!engPart && hinPart) engPart = hinPart;
       if (!hinPart && engPart) hinPart = engPart;
 
-      const selectedLangText = language === 'english' ? engPart : hinPart;
-      
-      // Return Image Code + Translated Text
-      return sharedText ? `${sharedText}<br/><br/>${selectedLangText}` : selectedLangText;
+      text = sharedText ? `${sharedText}\n\n${language === 'english' ? engPart : hinPart}` : (language === 'english' ? engPart : hinPart);
+    } else if (text.includes(" / ")) {
+      const parts = text.split(" / ");
+      text = language === 'english' ? parts[0].trim() : (parts[1] ? parts[1].trim() : parts[0].trim());
     }
 
-    if (cleanText.includes(" / ")) {
-      const parts = cleanText.split(" / ");
-      return language === 'english' ? parts[0].trim() : (parts[1] ? parts[1].trim() : parts[0].trim());
+    // Advanced Tokenizer for Images & Math from Prospectus HTML
+    const imageTokens = [];
+    text = text.replace(/!\[image\]\((data:image\/[^)]+)\)/g, (match, base64) => {
+        const token = `@@IMAGE_TOKEN_${imageTokens.length}@@`;
+        imageTokens.push(`<div style="text-align:left; margin:10px 0;"><img src="${base64}" style="max-width:100%; max-height:250px; border-radius:8px; border:2px solid #374151;" /></div>`);
+        return token;
+    });
+
+    // Fix Math Arrows and wrap Double Dollars to Inline (Prospectus logic)
+    text = text.replace(/\\xrightarrow(?!\s*\{)/g, '\\rightarrow');
+    text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, formula) => '\\(' + formula.trim() + '\\)');
+
+    // Restore Images
+    for (let i = 0; i < imageTokens.length; i++) {
+        text = text.replace(`@@IMAGE_TOKEN_${i}@@`, imageTokens[i]);
     }
-    return cleanText;
+    
+    // Replace newlines with <br/> for clean display
+    return text.replace(/\n/g, '<br/>');
   };
 
   const handleOptionSelect = (opt) => {
@@ -200,7 +186,7 @@ export default function Dashboard({ user, onLogout }) {
     if (!isConfirmed) return;
 
     setTestStatus('processing');
-    if(document.fullscreenElement) document.exitFullscreen().catch(e=>console.log(e));
+    if(document.fullscreenElement) document.exitFullscreen().catch(e=>{});
     localStorage.removeItem(`aeo_test_${user.phone || user.uid}`);
 
     let marksObtained = 0; let correctCount = 0; let wrongCount = 0;
@@ -224,10 +210,7 @@ export default function Dashboard({ user, onLogout }) {
       await addDoc(collection(db, "results"), finalResult);
       setResult(finalResult);
       setTestStatus('submitted');
-    } catch (error) {
-      alert("Error saving result! Please take a screenshot.");
-      console.error(error);
-    }
+    } catch (error) { alert("Error saving result!"); console.error(error); }
   };
 
   const formatTime = (seconds) => {
@@ -239,13 +222,9 @@ export default function Dashboard({ user, onLogout }) {
     const now = new Date().getTime();
     const end = new Date(activeTest.endTime).getTime();
     if (now < end) {
-      const formattedTime = new Date(activeTest.endTime).toLocaleString('en-IN', {
-        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
-      });
+      const formattedTime = new Date(activeTest.endTime).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
       alert(`Review will be available after test expires on ${formattedTime}.`);
-    } else {
-      setTestStatus('review');
-    }
+    } else { setTestStatus('review'); }
   };
 
   if (testStatus === 'dashboard') {
@@ -320,7 +299,7 @@ export default function Dashboard({ user, onLogout }) {
 
           <div className="bg-gray-900 p-6 md:p-10 rounded-3xl border-2 border-gray-700 shadow-xl mb-6 flex-1 overflow-auto">
             <h3 
-              className="text-2xl md:text-3xl font-semibold text-yellow-300 mb-8 whitespace-pre-wrap leading-relaxed latex-content"
+              className="text-2xl md:text-3xl font-semibold text-yellow-300 mb-8 whitespace-pre-wrap leading-relaxed"
               dangerouslySetInnerHTML={{ __html: parseText(question.question) }}
             />
             <div className="flex flex-col gap-4">
@@ -331,7 +310,7 @@ export default function Dashboard({ user, onLogout }) {
                     ${answers[currentQIndex] === opt ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]' : 'bg-black border-gray-600 text-gray-300 hover:bg-gray-800'}`}
                 >
                   <span className="font-bold">{String.fromCharCode(65 + idx)}.</span>
-                  <span dangerouslySetInnerHTML={{ __html: parseText(opt) }} className="latex-content" />
+                  <span dangerouslySetInnerHTML={{ __html: parseText(opt) }} />
                 </button>
               ))}
             </div>
@@ -387,7 +366,7 @@ export default function Dashboard({ user, onLogout }) {
             return (
               <div key={idx} className={`bg-gray-900 p-6 md:p-8 rounded-3xl border-l-8 shadow-lg ${isCorrect ? 'border-green-500' : isUnanswered ? 'border-gray-500' : 'border-red-500'}`}>
                 <h3 className="text-xl md:text-2xl font-bold text-gray-200 mb-6 flex items-start gap-2">
-                  <span>Q{idx + 1}.</span> <span dangerouslySetInnerHTML={{ __html: parseText(q.question) }} className="latex-content" />
+                  <span>Q{idx + 1}.</span> <span dangerouslySetInnerHTML={{ __html: parseText(q.question) }} />
                 </h3>
                 <div className="flex flex-col gap-3 mb-6">
                   {q.options.map((opt, oIdx) => {
@@ -397,7 +376,7 @@ export default function Dashboard({ user, onLogout }) {
                     return (
                       <div key={oIdx} className={`p-4 rounded-xl border-2 text-lg flex items-start gap-3 ${optStyle}`}>
                         <span className="font-bold">{String.fromCharCode(65 + oIdx)}.</span>
-                        <span dangerouslySetInnerHTML={{ __html: parseText(opt) }} className="latex-content" />
+                        <span dangerouslySetInnerHTML={{ __html: parseText(opt) }} />
                       </div>
                     );
                   })}
