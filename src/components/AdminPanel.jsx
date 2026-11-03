@@ -212,7 +212,7 @@ Output Format Example:
     } catch (error) { alert(error.message); } finally { setLoading(false); }
   };
 
-  // PREMIUM BEAUTIFUL PDF GENERATOR
+  // ==================== PREMIUM COLORFUL PDF GENERATOR ====================
   const handleDownloadPDF = async () => {
     if (!resultTest) return alert("Please select a test first.");
     const q = query(collection(db, "results"), where("testId", "==", resultTest));
@@ -224,19 +224,17 @@ Output Format Example:
 
     const printWindow = window.open('', '_blank');
     
-    // Colorful Rows with Smart Logic
+    // Colorful Rows with Smart Rank Badges & Dynamic Colors
     const tableRows = resultsData.length > 0 
       ? resultsData.map((res, index) => {
-          // Rank Badge Logic (Gold, Silver, Bronze, Normal)
           let rankStyle = index === 0 ? "background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #fff; box-shadow: 0 4px 10px rgba(245,158,11,0.4);" : 
                           index === 1 ? "background: linear-gradient(135deg, #94a3b8, #cbd5e1); color: #fff; box-shadow: 0 4px 10px rgba(148,163,184,0.4);" : 
                           index === 2 ? "background: linear-gradient(135deg, #b45309, #d97706); color: #fff; box-shadow: 0 4px 10px rgba(180,83,9,0.4);" : 
                           "background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1;";
           
-          // Percentage Color Logic
           let percentage = parseFloat(res.percentage);
           let percColor = percentage >= 80 ? '#10b981' : percentage >= 50 ? '#f59e0b' : '#ef4444';
-          let rowBg = index % 2 === 0 ? '#ffffff' : '#f8fafc'; // Zebra Striping
+          let rowBg = index % 2 === 0 ? '#ffffff' : '#f8fafc';
 
           return `
           <tr style="background-color: ${rowBg};">
@@ -250,6 +248,7 @@ Output Format Example:
       : `<tr><td colSpan="5" style="text-align: center; padding: 30px; color: #ef4444; font-size: 1.2rem; font-weight: bold;">No results found yet.</td></tr>`;
 
     printWindow.document.write(`
+      <!DOCTYPE html>
       <html>
         <head>
           <title>${testName} - AEO Premium Results</title>
@@ -279,7 +278,6 @@ Output Format Example:
               text-align: center;
               position: relative;
             }
-            /* Curved Bottom for Header */
             .report-header::after {
               content: '';
               position: absolute;
