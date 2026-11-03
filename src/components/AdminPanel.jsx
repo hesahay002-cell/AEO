@@ -89,7 +89,6 @@ export default function AdminPanel({ onLogout }) {
     ctx.drawImage(currentImgRef.current, 0, 0, width, height);
     
     const finalBase64 = cvs.toDataURL('image/jpeg', 0.75); 
-    // DIRECT HTML (Safe for dashboard)
     const imgHTML = `\n<div style="text-align:center; margin:15px 0;"><img src="${finalBase64}" style="max-width:100%; border-radius:8px; border:2px solid #374151;" /></div>\n`;
     
     if (imgModal.targetTab === 'new') {
@@ -100,7 +99,6 @@ export default function AdminPanel({ onLogout }) {
     setImgModal({ isOpen: false, src: '', targetTab: '', start: 0, end: 0 });
   };
 
-  // OLD FORMAT PARSER (FIXED TO SEPARATE OPTIONS CORRECTLY)
   const parseCustomFormat = (rawText) => {
     const lines = String(rawText).split('\n');
     const questions = [];
@@ -214,6 +212,7 @@ Output Format Example:
     } catch (error) { alert(error.message); } finally { setLoading(false); }
   };
 
+  // PREMIUM BEAUTIFUL PDF GENERATOR
   const handleDownloadPDF = async () => {
     if (!resultTest) return alert("Please select a test first.");
     const q = query(collection(db, "results"), where("testId", "==", resultTest));
@@ -224,14 +223,158 @@ Output Format Example:
     const testName = selectedTestData ? `${selectedTestData.className} - ${selectedTestData.subject}` : 'Test Result';
 
     const printWindow = window.open('', '_blank');
+    
+    // Colorful Rows with Smart Logic
     const tableRows = resultsData.length > 0 
-      ? resultsData.map((res, index) => `<tr><td><strong>${index + 1}</strong></td><td>${res.studentName}</td><td>${res.school}</td><td><strong>${res.obtainedMarks}</strong> / ${res.totalMarks}</td><td>${res.percentage}%</td></tr>`).join('')
-      : `<tr><td colSpan="5">No results found yet.</td></tr>`;
+      ? resultsData.map((res, index) => {
+          // Rank Badge Logic (Gold, Silver, Bronze, Normal)
+          let rankStyle = index === 0 ? "background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #fff; box-shadow: 0 4px 10px rgba(245,158,11,0.4);" : 
+                          index === 1 ? "background: linear-gradient(135deg, #94a3b8, #cbd5e1); color: #fff; box-shadow: 0 4px 10px rgba(148,163,184,0.4);" : 
+                          index === 2 ? "background: linear-gradient(135deg, #b45309, #d97706); color: #fff; box-shadow: 0 4px 10px rgba(180,83,9,0.4);" : 
+                          "background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1;";
+          
+          // Percentage Color Logic
+          let percentage = parseFloat(res.percentage);
+          let percColor = percentage >= 80 ? '#10b981' : percentage >= 50 ? '#f59e0b' : '#ef4444';
+          let rowBg = index % 2 === 0 ? '#ffffff' : '#f8fafc'; // Zebra Striping
+
+          return `
+          <tr style="background-color: ${rowBg};">
+            <td><div class="rank-badge" style="${rankStyle}">${index + 1}</div></td>
+            <td style="font-weight: 700; color: #1e293b; text-align: left; padding-left: 20px;">${res.studentName}</td>
+            <td style="color: #64748b; font-weight: 500;">${res.school}</td>
+            <td><span style="color: #2563eb; font-weight: 900; font-size: 1.1em;">${res.obtainedMarks}</span> <span style="color:#94a3b8; font-weight: 600;">/ ${res.totalMarks}</span></td>
+            <td><div class="perc-box" style="color: ${percColor}; border: 1.5px solid ${percColor};">${res.percentage}%</div></td>
+          </tr>`;
+        }).join('')
+      : `<tr><td colSpan="5" style="text-align: center; padding: 30px; color: #ef4444; font-size: 1.2rem; font-weight: bold;">No results found yet.</td></tr>`;
 
     printWindow.document.write(`
       <html>
-        <head><title>${testName} - Results</title><style>body { font-family: sans-serif; padding: 40px; } table { width: 100%; border-collapse: collapse; } th { background-color: #0f172a; color: #facc15; padding: 15px; border: 1px solid #0f172a; } td { padding: 12px 15px; text-align: center; border: 1px solid #ddd; }</style></head>
-        <body><div style="text-align:center;"><h1>AEO Results</h1><h2>${testName}</h2></div><table><thead><tr><th>Rank</th><th>Name</th><th>School</th><th>Marks</th><th>%</th></tr></thead><tbody>${tableRows}</tbody></table><div style="text-align:center; margin-top: 20px;"><button onclick="window.print()">Print PDF</button></div></body>
+        <head>
+          <title>${testName} - AEO Premium Results</title>
+          <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+          <style>
+            @page { size: A4; margin: 10mm; }
+            body { 
+              font-family: 'Poppins', sans-serif; 
+              margin: 0; padding: 20px; 
+              background-color: #f1f5f9;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .report-container {
+              background: #ffffff;
+              border-radius: 20px;
+              box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+              overflow: hidden;
+              border: 1px solid #e2e8f0;
+              max-width: 1000px;
+              margin: 0 auto;
+            }
+            .report-header {
+              background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+              color: white;
+              padding: 50px 30px 40px;
+              text-align: center;
+              position: relative;
+            }
+            /* Curved Bottom for Header */
+            .report-header::after {
+              content: '';
+              position: absolute;
+              bottom: -2px; left: 0; width: 100%; height: 30px;
+              background: #ffffff;
+              border-radius: 100% 100% 0 0 / 100% 100% 0 0;
+            }
+            .report-header h1 {
+              margin: 0; font-size: 3rem; font-weight: 900;
+              letter-spacing: 3px; color: #facc15;
+              text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+              text-transform: uppercase;
+            }
+            .report-header h2 {
+              margin: 10px 0 0 0; font-size: 1.4rem; font-weight: 500;
+              color: #e0e7ff; letter-spacing: 1px;
+            }
+            .report-header .badge {
+              display: inline-block; margin-top: 15px; padding: 6px 20px;
+              background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+              border-radius: 50px; font-size: 0.9rem; font-weight: 600; color: #cbd5e1;
+            }
+            table { 
+              width: 100%; border-collapse: separate; border-spacing: 0; 
+              margin: 20px 0;
+            }
+            th { 
+              background: #f8fafc; color: #64748b; 
+              padding: 18px 15px; font-weight: 700; text-transform: uppercase;
+              font-size: 0.85rem; letter-spacing: 1.5px;
+              border-top: 1px solid #e2e8f0; border-bottom: 2px solid #cbd5e1;
+            }
+            td { 
+              padding: 16px 15px; text-align: center; 
+              border-bottom: 1px solid #e2e8f0; font-size: 1rem;
+            }
+            .rank-badge {
+              display: inline-flex; align-items: center; justify-content: center;
+              width: 36px; height: 36px; border-radius: 50%;
+              font-weight: 800; font-size: 1.1rem;
+            }
+            .perc-box {
+              display: inline-block; padding: 6px 12px; border-radius: 8px;
+              font-weight: 800; font-size: 0.95rem; background: #ffffff;
+            }
+            .footer {
+              text-align: center; padding: 25px; background: #f8fafc;
+              color: #64748b; font-size: 0.85rem; font-weight: 500;
+              border-top: 1px dashed #cbd5e1;
+            }
+            .footer strong { color: #0f172a; font-weight: 700; }
+            .print-btn-wrapper { text-align: center; margin-bottom: 20px; }
+            .print-btn {
+              background: linear-gradient(135deg, #10b981, #059669); color: white;
+              border: none; padding: 15px 40px; font-size: 1.2rem; font-weight: 800;
+              border-radius: 50px; cursor: pointer; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+              text-transform: uppercase; letter-spacing: 1px; transition: transform 0.2s;
+            }
+            @media print {
+              .print-btn-wrapper { display: none !important; }
+              body { background-color: #ffffff; padding: 0; }
+              .report-container { box-shadow: none; border: none; max-width: 100%; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-btn-wrapper">
+            <button class="print-btn" onclick="window.print()">🖨️ Save Premium PDF</button>
+          </div>
+          <div class="report-container">
+            <div class="report-header">
+              <h1>AEO Scorecard</h1>
+              <h2>${testName}</h2>
+              <div class="badge">Official Merit List</div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 10%;">Rank</th>
+                  <th style="text-align: left; padding-left: 20px; width: 35%;">Student Name</th>
+                  <th style="width: 25%;">School / Code</th>
+                  <th style="width: 15%;">Score</th>
+                  <th style="width: 15%;">Accuracy</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+            <div class="footer">
+              Generated by <strong>Safal Academy Live</strong> | Academic Excellence Olympiad (AEO)<br>
+              <span style="font-size: 0.75rem; color: #94a3b8; margin-top: 5px; display: inline-block;">Date: ${new Date().toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+        </body>
       </html>
     `);
     printWindow.document.close();
@@ -420,7 +563,7 @@ Output Format Example:
         {activeTab === 'manage' && (
           <div className="grid grid-cols-1 gap-10">
             <div className="bg-gray-800 border-l-4 border-yellow-500 p-8 rounded-2xl shadow-lg">
-              <h3 className="text-3xl font-extrabold text-yellow-400 mb-6">🏆 Result PDF Generator</h3>
+              <h3 className="text-3xl font-extrabold text-yellow-400 mb-6">🏆 Premium Result PDF Generator</h3>
               <div className="flex flex-col md:flex-row gap-6 items-end">
                 <div className="w-full">
                   <select value={resultClass} onChange={(e) => setResultClass(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full"><option value="" disabled>Select Class</option>{classOptions.map(cls => <option key={cls} value={cls}>{cls}</option>)}</select>
@@ -428,7 +571,7 @@ Output Format Example:
                 <div className="w-full">
                   <select value={resultTest} onChange={(e) => setResultTest(e.target.value)} className="p-4 text-xl bg-black text-yellow-300 border-2 border-gray-600 rounded-xl outline-none w-full"><option value="" disabled>Select Test</option>{tests.filter(t => t.className === resultClass).map(t => <option key={t.id} value={t.id}>{t.subject}</option>)}</select>
                 </div>
-                <button onClick={handleDownloadPDF} className="w-full md:w-auto bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Generate PDF</button>
+                <button onClick={handleDownloadPDF} className="w-full md:w-auto bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-xl py-4 px-10 rounded-xl whitespace-nowrap">Generate Premium PDF</button>
               </div>
             </div>
 
