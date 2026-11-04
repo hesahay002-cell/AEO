@@ -23,6 +23,7 @@ export default function Login({ onLogin, onAdminLogin }) {
 
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
     const url = `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`;
+    
     const payload = {
       messaging_product: "whatsapp",
       to: `91${phoneNumber}`,
@@ -33,6 +34,14 @@ export default function Login({ onLogin, onAdminLogin }) {
         components: [
           {
             type: "body",
+            parameters: [
+              { type: "text", text: otpCode }
+            ]
+          },
+          {
+            type: "button",
+            sub_type: "url",
+            index: "0",
             parameters: [
               { type: "text", text: otpCode }
             ]
@@ -52,7 +61,6 @@ export default function Login({ onLogin, onAdminLogin }) {
     
     const data = await response.json();
     
-    // Agar Meta koi error dega, toh hum use throw karenge taaki screen par dikhe
     if (data.error) {
         throw new Error(data.error.message || JSON.stringify(data.error));
     }
@@ -80,15 +88,12 @@ export default function Login({ onLogin, onAdminLogin }) {
       const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
       setGeneratedOtp(newOtp);
       
-      // OTP Bhejne ka function call
       await sendWhatsAppOTP(phone, newOtp);
       
-      // Agar yahan tak aa gaya bina error ke, matlab OTP chala gaya!
       setOtp('');
       setStep(2);
       
     } catch (err) {
-      // YAHAN META KA ASLI ERROR SCREEN PAR DIKHEGA!
       setError("Meta Error: " + err.message);
     } finally {
       setLoading(false);
@@ -178,7 +183,7 @@ export default function Login({ onLogin, onAdminLogin }) {
           </div>
         )}
 
-        {/* ERROR MESSAGE BOX (Yahan Meta ka Asli Error aayega) */}
+        {/* ERROR MESSAGE BOX */}
         {error && <div className="bg-red-950/80 border-l-4 border-red-500 text-red-200 p-4 rounded-xl mb-6 text-sm font-bold shadow-lg break-words">{error}</div>}
 
         {/* STEP 1: PHONE NUMBER */}
