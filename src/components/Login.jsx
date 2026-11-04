@@ -19,11 +19,39 @@ export default function Login({ onLogin, onAdminLogin }) {
   const [adminPassword, setAdminPassword] = useState('');
 
   // ================= META WHATSAPP API SETTINGS =================
-  const META_TOKEN = "1258484434020011"; 
-  const PHONE_NUMBER_ID = "EAAUzbFPL5GIBSb8M09o9XYfhoCDcroxJaZCTGl985d2OqgAaZBFiZA3k1ZAWoDhfMzQe2mN8O2tTzLtpAHyxlpaCc9ybSGu1SkAl4f24tjnSfpIyu6gct8CmPVpYijcq8KOAi8TQvQ780W7oDG8PtzkaDqZBS2pLGvgMY3lTUOFkoqGUf8DxvbhXiRGHt3v5sLAZDZD";
+  const META_TOKEN = "EAAUzbFPL5GIBSb8M09o9XYfhoCDcroxJaZCTGl985d2OqgAaZBFiZA3k1ZAWoDhfMzQe2mN8O2tTzLtpAHyxlpaCc9ybSGu1SkAl4f24tjnSfpIyu6gct8CmPVpYijcq8KOAi8TQvQ780W7oDG8PtzkaDqZBS2pLGvgMY3lTUOFkoqGUf8DxvbhXiRGHt3v5sLAZDZD"; 
+  const PHONE_NUMBER_ID = "1258484434020011";
 
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
     const url = `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`;
+    
+    // Exactly matching your "aeo_login_otp" Authentication Template with Copy Code Button
+    const payload = {
+      messaging_product: "whatsapp",
+      to: `91${phoneNumber}`,
+      type: "template",
+      template: {
+        name: "aeo_login_otp",
+        language: { code: "en_US" },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: otpCode }
+            ]
+          },
+          {
+            type: "button",
+            sub_type: "url",
+            index: "0",
+            parameters: [
+              { type: "text", text: otpCode }
+            ]
+          }
+        ]
+      }
+    };
+
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -31,16 +59,7 @@ export default function Login({ onLogin, onAdminLogin }) {
           'Authorization': `Bearer ${META_TOKEN}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          recipient_type: "individual",
-          to: `91${phoneNumber}`,
-          type: "text",
-          text: {
-            preview_url: false,
-            body: `Safal Academy Live - AEO Portal\nAapka secure login OTP hai: *${otpCode}*\nKripya ise kisi ke sath share na karein.`
-          }
-        })
+        body: JSON.stringify(payload)
       });
       const data = await response.json();
       if (data.error) throw new Error(data.error.message);
@@ -73,13 +92,14 @@ export default function Login({ onLogin, onAdminLogin }) {
 
       const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
       setGeneratedOtp(newOtp);
+      
       const isSent = await sendWhatsAppOTP(phone, newOtp);
       
       if (isSent) {
           setOtp('');
           setStep(2);
       } else {
-          setError("WhatsApp API Failed! Check credentials.");
+          setError("WhatsApp API Failed! Check credentials & template.");
       }
     } catch (err) {
       setError("Server Error. Please try again.");
@@ -153,11 +173,11 @@ export default function Login({ onLogin, onAdminLogin }) {
       ></div>
       {showAdminSecret && (
         <div 
-          className="absolute top-4 right-4 bg-gray-950 border-2 border-gray-800 p-2 rounded-xl z-50 flex gap-2 shadow-lg"
+          className="absolute top-4 right-4 bg-gray-950 border-2 border-gray-800 p-2 rounded-xl z-50 flex gap-2 shadow-[0_0_20px_rgba(239,68,68,0.3)] animate-pulse"
           onMouseLeave={() => setShowAdminSecret(false)}
         >
-          <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Passcode" className="bg-black text-red-400 font-bold px-3 py-1.5 rounded-lg w-28 text-sm outline-none border border-gray-800 focus:border-red-500 text-center tracking-widest" autoFocus onKeyDown={(e) => e.key === 'Enter' && handleSecretAdminLogin()} />
-          <button type="button" onClick={handleSecretAdminLogin} className="bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded-lg text-sm font-black">OK</button>
+          <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Passcode" className="bg-black text-red-400 font-bold px-3 py-1.5 rounded-lg w-28 text-sm outline-none border border-gray-800 focus:border-red-500 text-center tracking-widest shadow-inner" autoFocus onKeyDown={(e) => e.key === 'Enter' && handleSecretAdminLogin()} />
+          <button type="button" onClick={handleSecretAdminLogin} className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white px-4 py-1.5 rounded-lg text-sm font-black shadow-lg">OK</button>
         </div>
       )}
 
@@ -175,7 +195,7 @@ export default function Login({ onLogin, onAdminLogin }) {
           </div>
         )}
 
-        {error && <div className="bg-red-950/80 border-l-4 border-red-500 text-red-200 p-4 rounded-xl mb-6 text-sm font-bold">{error}</div>}
+        {error && <div className="bg-red-950/80 border-l-4 border-red-500 text-red-200 p-4 rounded-xl mb-6 text-sm font-bold shadow-lg">{error}</div>}
 
         {/* STEP 1: PHONE NUMBER */}
         {step === 1 && (
@@ -186,13 +206,13 @@ export default function Login({ onLogin, onAdminLogin }) {
             </div>
             <div className="relative">
               <label className="text-xs font-extrabold text-blue-400 uppercase ml-2 mb-2 block tracking-wider">WhatsApp Number</label>
-              <div className="flex bg-black/60 border-2 border-gray-800 rounded-2xl overflow-hidden focus-within:border-blue-500 transition-all">
+              <div className="flex bg-black/60 border-2 border-gray-800 rounded-2xl overflow-hidden focus-within:border-blue-500 focus-within:shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all shadow-inner">
                 <span className="flex items-center px-4 bg-gray-900 text-gray-400 font-bold border-r border-gray-800">+91</span>
                 <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, '').slice(0,10))} placeholder="9876543210" className="w-full bg-transparent text-white text-2xl p-4 outline-none font-bold tracking-widest" autoFocus />
               </div>
             </div>
-            <button type="submit" disabled={loading} className="w-full mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xl py-4 rounded-2xl shadow-[0_10px_25px_rgba(37,99,235,0.4)] transition-all">
-              {loading ? 'Authenticating...' : 'Send OTP'}
+            <button type="submit" disabled={loading} className="w-full mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 text-white font-black text-xl py-4 rounded-2xl shadow-[0_10px_25px_rgba(37,99,235,0.4)] transition-all transform hover:-translate-y-0.5">
+              {loading ? 'Authenticating...' : 'Send OTP on WhatsApp'}
             </button>
           </form>
         )}
@@ -200,15 +220,15 @@ export default function Login({ onLogin, onAdminLogin }) {
         {/* STEP 2: VERIFY OTP */}
         {step === 2 && (
           <form onSubmit={handleVerifyOtp} className="flex flex-col gap-6">
-            <div className="text-center mb-2 bg-black/40 p-4 rounded-2xl border border-gray-800">
+            <div className="text-center mb-2 bg-black/40 p-4 rounded-2xl border border-gray-800 shadow-inner">
               <p className="text-green-400 font-bold">OTP sent securely to +91 {phone}</p>
-              <button type="button" onClick={() => setStep(1)} className="text-blue-400 text-xs font-bold underline mt-2">Change Number</button>
+              <button type="button" onClick={() => setStep(1)} className="text-blue-400 text-xs font-bold underline mt-2 hover:text-blue-300">Change Number</button>
             </div>
             <div className="relative">
               <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-2 block text-center tracking-widest">Enter 4-Digit OTP</label>
-              <input type="text" value={otp} onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0,4))} placeholder="••••" className="w-full bg-black/60 border-2 border-gray-800 text-white text-center text-4xl tracking-[1em] p-4 rounded-2xl outline-none focus:border-green-500 font-black" autoFocus />
+              <input type="text" value={otp} onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0,4))} placeholder="••••" className="w-full bg-black/60 border-2 border-gray-800 text-white text-center text-4xl tracking-[1em] p-4 rounded-2xl outline-none focus:border-green-500 focus:shadow-[0_0_20px_rgba(34,197,94,0.4)] shadow-inner font-black" autoFocus />
             </div>
-            <button type="submit" className="w-full mt-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 text-white font-black text-xl py-4 rounded-2xl shadow-[0_10px_25px_rgba(16,185,129,0.4)]">
+            <button type="submit" className="w-full mt-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 text-white font-black text-xl py-4 rounded-2xl shadow-[0_10px_25px_rgba(16,185,129,0.4)] transition-all transform hover:-translate-y-0.5">
               Verify Identity
             </button>
           </form>
@@ -223,22 +243,22 @@ export default function Login({ onLogin, onAdminLogin }) {
             </div>
             <div className="relative">
                 <label className="text-xs font-extrabold text-blue-400 uppercase ml-2 mb-1 block">Full Name</label>
-                <input type="text" value={profileData.name} onChange={(e) => setProfileData({...profileData, name: e.target.value})} placeholder="Rahul Kumar" className="w-full bg-black/60 border-2 border-gray-800 text-white text-lg p-3.5 rounded-2xl outline-none focus:border-blue-500 font-medium" />
+                <input type="text" value={profileData.name} onChange={(e) => setProfileData({...profileData, name: e.target.value})} placeholder="Rahul Kumar" className="w-full bg-black/60 border-2 border-gray-800 text-white text-lg p-3.5 rounded-2xl outline-none focus:border-blue-500 shadow-inner font-medium" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="relative">
                     <label className="text-xs font-extrabold text-green-400 uppercase ml-2 mb-1 block">Class / Target</label>
-                    <select value={profileData.className} onChange={(e) => setProfileData({...profileData, className: e.target.value})} className="w-full bg-black/60 border-2 border-gray-800 text-white text-lg p-3.5 rounded-2xl outline-none focus:border-green-500 appearance-none cursor-pointer">
+                    <select value={profileData.className} onChange={(e) => setProfileData({...profileData, className: e.target.value})} className="w-full bg-black/60 border-2 border-gray-800 text-white text-lg p-3.5 rounded-2xl outline-none focus:border-green-500 shadow-inner appearance-none cursor-pointer">
                         <option value="" disabled>Select Class</option>
                         {classOptions.map(cls => <option key={cls} value={cls} className="bg-gray-900 text-white">{cls}</option>)}
                     </select>
                 </div>
                 <div className="relative">
                     <label className="text-xs font-extrabold text-yellow-400 uppercase ml-2 mb-1 block">School / Institute</label>
-                    <input type="text" value={profileData.school} onChange={(e) => setProfileData({...profileData, school: e.target.value})} placeholder="DAV Public School" className="w-full bg-black/60 border-2 border-gray-800 text-white text-lg p-3.5 rounded-2xl outline-none focus:border-yellow-500 font-medium" />
+                    <input type="text" value={profileData.school} onChange={(e) => setProfileData({...profileData, school: e.target.value})} placeholder="DAV Public School" className="w-full bg-black/60 border-2 border-gray-800 text-white text-lg p-3.5 rounded-2xl outline-none focus:border-yellow-500 shadow-inner font-medium" />
                 </div>
             </div>
-            <button type="submit" disabled={loading} className="w-full mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-lg py-4 rounded-2xl shadow-lg">
+            <button type="submit" disabled={loading} className="w-full mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 text-white font-black text-lg py-4 rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5">
               {loading ? 'Saving...' : 'Save & Continue'}
             </button>
           </form>
@@ -252,7 +272,7 @@ export default function Login({ onLogin, onAdminLogin }) {
               <p className="text-blue-400 font-bold text-sm uppercase mt-1">Read Carefully Before Proceeding</p>
             </div>
             
-            <div className="bg-black/50 border border-gray-800 rounded-2xl p-6 overflow-y-auto custom-scrollbar flex-grow space-y-6">
+            <div className="bg-black/50 border border-gray-800 rounded-2xl p-6 overflow-y-auto custom-scrollbar flex-grow space-y-6 shadow-inner">
               
               {/* English Section */}
               <div>
