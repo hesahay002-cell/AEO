@@ -21,7 +21,6 @@ export default function Login({ onLogin, onAdminLogin }) {
   const META_TOKEN = "EAAUzbFPL5GIBSb8M09o9XYfhoCDcroxJaZCTGl985d2OqgAaZBFiZA3k1ZAWoDhfMzQe2mN8O2tTzLtpAHyxlpaCc9ybSGu1SkAl4f24tjnSfpIyu6gct8CmPVpYijcq8KOAi8TQvQ780W7oDG8PtzkaDqZBS2pLGvgMY3lTUOFkoqGUf8DxvbhXiRGHt3v5sLAZDZD"; 
   const PHONE_NUMBER_ID = "1258484434020011";
 
-  // FINAL WHATSAPP OTP FUNCTION
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
     const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
     
@@ -32,7 +31,6 @@ export default function Login({ onLogin, onAdminLogin }) {
       template: {
         name: "aeo_login_otp",
         language: { code: "en_US" },
-        // SUPER FIX: Body aur Button DONO mein exactly 6-digit OTP bhejna hai!
         components: [
           {
             type: "body",
@@ -72,6 +70,7 @@ export default function Login({ onLogin, onAdminLogin }) {
     return true;
   };
 
+  // SMART LOGIN LOGIC: Device Verification
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -83,21 +82,34 @@ export default function Login({ onLogin, onAdminLogin }) {
       const userRef = doc(db, "students", phone);
       const userSnap = await getDoc(userRef);
       
+      const isDeviceVerified = localStorage.getItem(`aeo_device_${phone}`) === 'verified';
+      
       if (userSnap.exists()) {
-        setIsExistingUser(true);
         setProfileData(userSnap.data());
-      } else {
-        setIsExistingUser(false);
-      }
+        setIsExistingUser(true);
 
-      // Generate EXACTLY 6-digit OTP
-      const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedOtp(newOtp);
-      
-      await sendWhatsAppOTP(phone, newOtp);
-      
-      setOtp('');
-      setStep(2);
+        if (isDeviceVerified) {
+          // CASE 1: Purana Bacha + Purana Device -> Direct Entry!
+          setStep(4);
+        } else {
+          // CASE 2: Purana Bacha + NAYA DEVICE -> Send OTP!
+          const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+          setGeneratedOtp(newOtp);
+          await sendWhatsAppOTP(phone, newOtp);
+          setOtp('');
+          setStep(2);
+        }
+      } else {
+        // CASE 3: Ekdam Naya Bacha -> Send OTP!
+        setIsExistingUser(false);
+        const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        setGeneratedOtp(newOtp);
+        
+        await sendWhatsAppOTP(phone, newOtp);
+        
+        setOtp('');
+        setStep(2);
+      }
       
     } catch (err) {
       setError(err.message);
@@ -106,15 +118,19 @@ export default function Login({ onLogin, onAdminLogin }) {
     }
   };
 
+  // OTP VERIFICATION & DEVICE SAVING
   const handleVerifyOtp = (e) => {
     e.preventDefault();
     setError('');
     
     if (otp === generatedOtp) {
+      // Success! Is device ko is number ke liye hamesha ke liye verify kar do
+      localStorage.setItem(`aeo_device_${phone}`, 'verified');
+
       if (isExistingUser) {
-        setStep(4);
+        setStep(4); // Purana bacha OTP verify karke Instructions par jayega
       } else {
-        setStep(3); 
+        setStep(3); // Naya bacha Profile form par jayega
       }
     } else {
       setError("Invalid OTP! Please check your WhatsApp.");
