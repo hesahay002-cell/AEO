@@ -282,4 +282,21 @@ export default function Login({ onLogin, onAdminLogin }) {
                   <li><strong className="text-blue-400">AEO के बारे में:</strong> यह एक अत्यंत सुरक्षित और समयबद्ध परीक्षा है। यह परीक्षा आपकी वैचारिक स्पष्टता (Conceptual Clarity) को परखने के लिए बनाई गई है।</li>
                   <li><strong className="text-red-400">एंटी-चीट वार्निंग:</strong> परीक्षा के दौरान अगर आप नया टैब खोलते हैं, किसी अन्य ऐप पर जाते हैं, या स्क्रीन बदलते हैं, तो सिस्टम चेतावनी दर्ज करेगा। ज्यादा चेतावनी मिलने पर परीक्षा अपने आप सबमिट हो जाएगी।</li>
                   <li><strong className="text-yellow-400">पेज रिफ्रेश न करें:</strong> टेस्ट के दौरान गलती से भी 'Back' बटन या 'Refresh' (F5) न दबाएं। ऐसा करने से आपकी परीक्षा रद्द हो सकती है।</li>
-                  <li>कृपया सुनिश्चित करें कि आपका
+                  <li>कृपया सुनिश्चित करें कि आपका इंटरनेट कनेक्शन स्थिर है।</li>
+                </ul>
+              </div>
+
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-800">
+              <button onClick={handleEnterExam} className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-black text-xl py-4 rounded-2xl shadow-[0_10px_25px_rgba(16,185,129,0.4)] transform hover:-translate-y-1 transition-all uppercase tracking-wide">
+                I Agree, Show Available Tests
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
