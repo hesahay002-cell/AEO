@@ -14,7 +14,6 @@ export default function Login({ onLogin, onAdminLogin }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // ================= SECRET ADMIN STATES =================
   const [showAdminSecret, setShowAdminSecret] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
 
@@ -24,8 +23,6 @@ export default function Login({ onLogin, onAdminLogin }) {
 
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
     const url = `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`;
-    
-    // Exactly matching your "aeo_login_otp" Authentication Template with Copy Code Button
     const payload = {
       messaging_product: "whatsapp",
       to: `91${phoneNumber}`,
@@ -39,38 +36,29 @@ export default function Login({ onLogin, onAdminLogin }) {
             parameters: [
               { type: "text", text: otpCode }
             ]
-          },
-          {
-            type: "button",
-            sub_type: "url",
-            index: "0",
-            parameters: [
-              { type: "text", text: otpCode }
-            ]
           }
         ]
       }
     };
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${META_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-      const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
-      return true;
-    } catch (err) {
-      console.error("Fetch Error:", err);
-      return false;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${META_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    const data = await response.json();
+    
+    // Agar Meta koi error dega, toh hum use throw karenge taaki screen par dikhe
+    if (data.error) {
+        throw new Error(data.error.message || JSON.stringify(data.error));
     }
+    return true;
   };
 
-  // STEP 1: Check Phone & Send OTP
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -79,7 +67,6 @@ export default function Login({ onLogin, onAdminLogin }) {
 
     setLoading(true);
     try {
-      // Check if user exists in DB
       const userRef = doc(db, "students", phone);
       const userSnap = await getDoc(userRef);
       
@@ -93,38 +80,36 @@ export default function Login({ onLogin, onAdminLogin }) {
       const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
       setGeneratedOtp(newOtp);
       
-      const isSent = await sendWhatsAppOTP(phone, newOtp);
+      // OTP Bhejne ka function call
+      await sendWhatsAppOTP(phone, newOtp);
       
-      if (isSent) {
-          setOtp('');
-          setStep(2);
-      } else {
-          setError("WhatsApp API Failed! Check credentials & template.");
-      }
+      // Agar yahan tak aa gaya bina error ke, matlab OTP chala gaya!
+      setOtp('');
+      setStep(2);
+      
     } catch (err) {
-      setError("Server Error. Please try again.");
+      // YAHAN META KA ASLI ERROR SCREEN PAR DIKHEGA!
+      setError("Meta Error: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // STEP 2: Verify OTP
   const handleVerifyOtp = (e) => {
     e.preventDefault();
     setError('');
     
     if (otp === generatedOtp) {
       if (isExistingUser) {
-        setStep(4); // Purana user seedha Instructions par
+        setStep(4);
       } else {
-        setStep(3); // Naya user Profile banayega
+        setStep(3); 
       }
     } else {
       setError("Invalid OTP! Please check your WhatsApp.");
     }
   };
 
-  // STEP 3: Save Profile (For New Users Only)
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -139,19 +124,17 @@ export default function Login({ onLogin, onAdminLogin }) {
       const userData = { ...profileData, phone, uid: phone, joinedAt: new Date().toISOString() };
       await setDoc(userRef, userData, { merge: true });
       setProfileData(userData);
-      setStep(4); // Go to Instructions
+      setStep(4); 
     } catch (err) {
       setError("Database Error!");
     }
     setLoading(false);
   };
 
-  // STEP 4: Accept Instructions & Enter Exam
   const handleEnterExam = () => {
     onLogin({ ...profileData, phone, uid: phone });
   };
 
-  // Admin Login Logic
   const handleSecretAdminLogin = () => {
     if (adminPassword === '525077') {
       onAdminLogin();
@@ -195,7 +178,8 @@ export default function Login({ onLogin, onAdminLogin }) {
           </div>
         )}
 
-        {error && <div className="bg-red-950/80 border-l-4 border-red-500 text-red-200 p-4 rounded-xl mb-6 text-sm font-bold shadow-lg">{error}</div>}
+        {/* ERROR MESSAGE BOX (Yahan Meta ka Asli Error aayega) */}
+        {error && <div className="bg-red-950/80 border-l-4 border-red-500 text-red-200 p-4 rounded-xl mb-6 text-sm font-bold shadow-lg break-words">{error}</div>}
 
         {/* STEP 1: PHONE NUMBER */}
         {step === 1 && (
