@@ -21,7 +21,7 @@ export default function Login({ onLogin, onAdminLogin }) {
   const META_TOKEN = "EAAUzbFPL5GIBSb8M09o9XYfhoCDcroxJaZCTGl985d2OqgAaZBFiZA3k1ZAWoDhfMzQe2mN8O2tTzLtpAHyxlpaCc9ybSGu1SkAl4f24tjnSfpIyu6gct8CmPVpYijcq8KOAi8TQvQ780W7oDG8PtzkaDqZBS2pLGvgMY3lTUOFkoqGUf8DxvbhXiRGHt3v5sLAZDZD"; 
   const PHONE_NUMBER_ID = "1258484434020011";
 
-  // FINAL WHATSAPP OTP FUNCTION (As per Meta Authentication Template Rules)
+  // FINAL WHATSAPP OTP FUNCTION (Meta Auth Template Puzzle Solved!)
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
     const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
     
@@ -32,19 +32,15 @@ export default function Login({ onLogin, onAdminLogin }) {
       template: {
         name: "aeo_login_otp",
         language: { code: "en_US" },
+        // SUPER FIX: Meta ke naye Auth Templates mein sirf Button bhejte hain, 
+        // Body automatically fill ho jati hai. Aur index string "0" hona chahiye!
         components: [
-          {
-            type: "body",
-            parameters: [
-              { type: "text", text: otpCode } // Body parameter
-            ]
-          },
           {
             type: "button",
             sub_type: "url",
-            index: 0, // IMPORTANT FIX: Ye Integer 0 hona chahiye, string nahi!
+            index: "0", 
             parameters: [
-              { type: "text", text: otpCode } // Copy Code Button parameter
+              { type: "text", text: otpCode }
             ]
           }
         ]
