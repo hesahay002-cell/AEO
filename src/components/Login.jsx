@@ -14,7 +14,6 @@ export default function Login({ onLogin, onAdminLogin }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Admin Secret States
   const [showAdminSecret, setShowAdminSecret] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
 
@@ -22,7 +21,7 @@ export default function Login({ onLogin, onAdminLogin }) {
   const META_TOKEN = "EAAUzbFPL5GIBSb8M09o9XYfhoCDcroxJaZCTGl985d2OqgAaZBFiZA3k1ZAWoDhfMzQe2mN8O2tTzLtpAHyxlpaCc9ybSGu1SkAl4f24tjnSfpIyu6gct8CmPVpYijcq8KOAi8TQvQ780W7oDG8PtzkaDqZBS2pLGvgMY3lTUOFkoqGUf8DxvbhXiRGHt3v5sLAZDZD"; 
   const PHONE_NUMBER_ID = "1258484434020011";
 
-  // FINAL WHATSAPP OTP FUNCTION (100% Tested Payload)
+  // FINAL WHATSAPP OTP FUNCTION (As per Meta Authentication Template Rules)
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
     const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
     
@@ -37,15 +36,15 @@ export default function Login({ onLogin, onAdminLogin }) {
           {
             type: "body",
             parameters: [
-              { type: "text", text: otpCode }
+              { type: "text", text: otpCode } // Body parameter
             ]
           },
           {
             type: "button",
             sub_type: "url",
-            index: 0, // Integer 0 (Yehi sabse main fix tha)
+            index: 0, // IMPORTANT FIX: Ye Integer 0 hona chahiye, string nahi!
             parameters: [
-              { type: "text", text: otpCode }
+              { type: "text", text: otpCode } // Copy Code Button parameter
             ]
           }
         ]
@@ -69,7 +68,6 @@ export default function Login({ onLogin, onAdminLogin }) {
     return true;
   };
 
-  // STEP 1: Phone Submit
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -78,7 +76,6 @@ export default function Login({ onLogin, onAdminLogin }) {
 
     setLoading(true);
     try {
-      // Firebase User Check
       const userRef = doc(db, "students", phone);
       const userSnap = await getDoc(userRef);
       
@@ -89,14 +86,13 @@ export default function Login({ onLogin, onAdminLogin }) {
         setIsExistingUser(false);
       }
 
-      // Generate & Send OTP
       const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
       setGeneratedOtp(newOtp);
       
       await sendWhatsAppOTP(phone, newOtp);
       
       setOtp('');
-      setStep(2); // Go to OTP screen
+      setStep(2);
       
     } catch (err) {
       setError("Meta Error: " + err.message);
@@ -105,23 +101,21 @@ export default function Login({ onLogin, onAdminLogin }) {
     }
   };
 
-  // STEP 2: OTP Verify
   const handleVerifyOtp = (e) => {
     e.preventDefault();
     setError('');
     
     if (otp === generatedOtp) {
       if (isExistingUser) {
-        setStep(4); // Old user -> Instructions
+        setStep(4);
       } else {
-        setStep(3); // New user -> Profile Form
+        setStep(3); 
       }
     } else {
       setError("Invalid OTP! Please check your WhatsApp.");
     }
   };
 
-  // STEP 3: Save New Profile
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -136,19 +130,17 @@ export default function Login({ onLogin, onAdminLogin }) {
       const userData = { ...profileData, phone, uid: phone, joinedAt: new Date().toISOString() };
       await setDoc(userRef, userData, { merge: true });
       setProfileData(userData);
-      setStep(4); // Go to Instructions
+      setStep(4); 
     } catch (err) {
       setError("Database Error!");
     }
     setLoading(false);
   };
 
-  // STEP 4: Enter Exam
   const handleEnterExam = () => {
     onLogin({ ...profileData, phone, uid: phone });
   };
 
-  // Secret Admin Login
   const handleSecretAdminLogin = () => {
     if (adminPassword === '525077') {
       onAdminLogin();
