@@ -21,7 +21,7 @@ export default function Login({ onLogin, onAdminLogin }) {
   const META_TOKEN = "EAAUzbFPL5GIBSb8M09o9XYfhoCDcroxJaZCTGl985d2OqgAaZBFiZA3k1ZAWoDhfMzQe2mN8O2tTzLtpAHyxlpaCc9ybSGu1SkAl4f24tjnSfpIyu6gct8CmPVpYijcq8KOAi8TQvQ780W7oDG8PtzkaDqZBS2pLGvgMY3lTUOFkoqGUf8DxvbhXiRGHt3v5sLAZDZD"; 
   const PHONE_NUMBER_ID = "1258484434020011";
 
-  // FINAL WHATSAPP OTP FUNCTION (Meta Auth Template Puzzle Solved!)
+  // FINAL WHATSAPP OTP FUNCTION (With Exact Payload & Deep Error Scanner)
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
     const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
     
@@ -32,15 +32,20 @@ export default function Login({ onLogin, onAdminLogin }) {
       template: {
         name: "aeo_login_otp",
         language: { code: "en_US" },
-        // SUPER FIX: Meta ke naye Auth Templates mein sirf Button bhejte hain, 
-        // Body automatically fill ho jati hai. Aur index string "0" hona chahiye!
+        // SUPER FIX: OTP ko exact format mein Body aur Button dono mein bhejna zaroori hai!
         components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: otpCode } 
+            ]
+          },
           {
             type: "button",
             sub_type: "url",
-            index: "0", 
+            index: "0", // String format "0"
             parameters: [
-              { type: "text", text: otpCode }
+              { type: "text", text: otpCode } 
             ]
           }
         ]
@@ -59,7 +64,11 @@ export default function Login({ onLogin, onAdminLogin }) {
     const data = await response.json();
     
     if (data.error) {
-        throw new Error(data.error.message || JSON.stringify(data.error));
+        // Yahan "Deep Error Scanner" Meta ka asli chhipa hua error nikalega!
+        const detailedError = data.error.error_data && data.error.error_data.details 
+            ? data.error.error_data.details 
+            : data.error.message;
+        throw new Error(`Meta Error: ${detailedError}`);
     }
     return true;
   };
@@ -82,6 +91,7 @@ export default function Login({ onLogin, onAdminLogin }) {
         setIsExistingUser(false);
       }
 
+      // Generate 4-digit OTP as String
       const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
       setGeneratedOtp(newOtp);
       
@@ -91,7 +101,7 @@ export default function Login({ onLogin, onAdminLogin }) {
       setStep(2);
       
     } catch (err) {
-      setError("Meta Error: " + err.message);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -194,7 +204,7 @@ export default function Login({ onLogin, onAdminLogin }) {
           </div>
         )}
 
-        {/* ERROR MESSAGE BOX */}
+        {/* ================= DEEP ERROR MESSAGE BOX ================= */}
         {error && <div className="bg-red-950/80 border-l-4 border-red-500 text-red-200 p-4 rounded-xl mb-6 text-sm font-bold shadow-lg break-words">{error}</div>}
 
         {/* STEP 1: PHONE NUMBER */}
