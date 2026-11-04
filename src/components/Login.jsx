@@ -22,7 +22,8 @@ export default function Login({ onLogin, onAdminLogin }) {
   const PHONE_NUMBER_ID = "1258484434020011";
 
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
-    const url = `https://graph.facebook.com/v17.0/${PHONE_NUMBER_ID}/messages`;
+    // API Version v19.0 for latest Authentication Template support
+    const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
     
     const payload = {
       messaging_product: "whatsapp",
@@ -31,13 +32,9 @@ export default function Login({ onLogin, onAdminLogin }) {
       template: {
         name: "aeo_login_otp",
         language: { code: "en_US" },
+        // SUPER FIX: Sirf Button parameter bhejna hai! 
+        // Meta body {1} ko button se automatically fill kar lega.
         components: [
-          {
-            type: "body",
-            parameters: [
-              { type: "text", text: otpCode }
-            ]
-          },
           {
             type: "button",
             sub_type: "url",
