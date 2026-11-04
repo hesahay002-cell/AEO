@@ -17,8 +17,8 @@ export default function Login({ onLogin, onAdminLogin }) {
   const [adminPassword, setAdminPassword] = useState('');
 
   // ================= META WHATSAPP API SETTINGS =================
-  const META_TOKEN = "YAHAN_APNA_PERMANENT_ACCESS_TOKEN_DAALEIN"; 
-  const PHONE_NUMBER_ID = "YAHAN_APNA_PHONE_NUMBER_ID_DAALEIN";
+  const META_TOKEN = "EAAUzbFPL5GIBSb8M09o9XYfhoCDcroxJaZCTGl985d2OqgAaZBFiZA3k1ZAWoDhfMzQe2mN8O2tTzLtpAHyxlpaCc9ybSGu1SkAl4f24tjnSfpIyu6gct8CmPVpYijcq8KOAi8TQvQ780W7oDG8PtzkaDqZBS2pLGvgMY3lTUOFkoqGUf8DxvbhXiRGHt3v5sLAZDZD"; 
+  const PHONE_NUMBER_ID = "1258484434020011";
   // ==============================================================
 
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
