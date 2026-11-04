@@ -32,13 +32,20 @@ export default function Login({ onLogin, onAdminLogin }) {
       template: {
         name: "aeo_login_otp",
         language: { code: "en_US" },
+        // SUPER FIX: Body aur Button DONO mein exactly 6-digit OTP bhejna hai!
         components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: otpCode } 
+            ]
+          },
           {
             type: "button",
             sub_type: "url",
             index: "0", 
             parameters: [
-              { type: "text", text: otpCode }
+              { type: "text", text: otpCode } 
             ]
           }
         ]
@@ -83,7 +90,7 @@ export default function Login({ onLogin, onAdminLogin }) {
         setIsExistingUser(false);
       }
 
-      // SUPER FIX: Generate EXACTLY 6-digit OTP as Meta demanded
+      // Generate EXACTLY 6-digit OTP
       const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
       setGeneratedOtp(newOtp);
       
@@ -219,7 +226,7 @@ export default function Login({ onLogin, onAdminLogin }) {
           </form>
         )}
 
-        {/* STEP 2: VERIFY OTP (Updated for 6 digits) */}
+        {/* STEP 2: VERIFY OTP */}
         {step === 2 && (
           <form onSubmit={handleVerifyOtp} className="flex flex-col gap-6">
             <div className="text-center mb-2 bg-black/40 p-4 rounded-2xl border border-gray-800 shadow-inner">
@@ -227,9 +234,7 @@ export default function Login({ onLogin, onAdminLogin }) {
               <button type="button" onClick={() => setStep(1)} className="text-blue-400 text-xs font-bold underline mt-2 hover:text-blue-300">Change Number</button>
             </div>
             <div className="relative">
-              {/* Changed Label to 6-Digit */}
               <label className="text-xs font-bold text-gray-400 uppercase ml-2 mb-2 block text-center tracking-widest">Enter 6-Digit OTP</label>
-              {/* Changed max length and placeholder to 6 digits */}
               <input type="text" value={otp} onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0,6))} placeholder="••••••" className="w-full bg-black/60 border-2 border-gray-800 text-white text-center text-4xl tracking-[0.5em] p-4 rounded-2xl outline-none focus:border-green-500 focus:shadow-[0_0_20px_rgba(34,197,94,0.4)] shadow-inner font-black" autoFocus />
             </div>
             <button type="submit" className="w-full mt-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 text-white font-black text-xl py-4 rounded-2xl shadow-[0_10px_25px_rgba(16,185,129,0.4)] transition-all transform hover:-translate-y-0.5">
@@ -293,7 +298,7 @@ export default function Login({ onLogin, onAdminLogin }) {
               <div>
                 <h3 className="text-lg font-bold text-white border-b border-gray-700 pb-2 mb-3">📌 महत्वपूर्ण निर्देश</h3>
                 <ul className="list-disc list-outside ml-5 text-gray-300 text-sm space-y-2 leading-relaxed">
-                  <li><strong className="text-blue-400">AEO के बारे में:</strong> यह কমান্ড अत्यंत सुरक्षित और समयबद्ध परीक्षा है। यह परीक्षा आपकी वैचारिक स्पष्टता (Conceptual Clarity) को परखने के लिए बनाई गई है।</li>
+                  <li><strong className="text-blue-400">AEO के बारे में:</strong> यह एक अत्यंत सुरक्षित और समयबद्ध परीक्षा है। यह परीक्षा आपकी वैचारिक स्पष्टता (Conceptual Clarity) को परखने के लिए बनाई गई है।</li>
                   <li><strong className="text-red-400">एंटी-चीट वार्निंग:</strong> परीक्षा के दौरान अगर आप नया टैब खोलते हैं, किसी अन्य ऐप पर जाते हैं, या स्क्रीन बदलते हैं, तो सिस्टम चेतावनी दर्ज करेगा। ज्यादा चेतावनी मिलने पर परीक्षा अपने आप सबमिट हो जाएगी।</li>
                   <li><strong className="text-yellow-400">पेज रिफ्रेश न करें:</strong> टेस्ट के दौरान गलती से भी 'Back' बटन या 'Refresh' (F5) न दबाएं। ऐसा करने से आपकी परीक्षा रद्द हो सकती है।</li>
                   <li>कृपया सुनिश्चित करें कि आपका इंटरनेट कनेक्शन स्थिर है।</li>
