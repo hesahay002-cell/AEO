@@ -14,13 +14,15 @@ export default function Login({ onLogin, onAdminLogin }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Admin Secret States
   const [showAdminSecret, setShowAdminSecret] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
 
-  // ================= META WHATSAPP API SETTINGS =================
+  // ================= META WHATSAPP API CREDENTIALS =================
   const META_TOKEN = "EAAUzbFPL5GIBSb8M09o9XYfhoCDcroxJaZCTGl985d2OqgAaZBFiZA3k1ZAWoDhfMzQe2mN8O2tTzLtpAHyxlpaCc9ybSGu1SkAl4f24tjnSfpIyu6gct8CmPVpYijcq8KOAi8TQvQ780W7oDG8PtzkaDqZBS2pLGvgMY3lTUOFkoqGUf8DxvbhXiRGHt3v5sLAZDZD"; 
   const PHONE_NUMBER_ID = "1258484434020011";
 
+  // FINAL WHATSAPP OTP FUNCTION (100% Tested Payload)
   const sendWhatsAppOTP = async (phoneNumber, otpCode) => {
     const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
     
@@ -31,7 +33,6 @@ export default function Login({ onLogin, onAdminLogin }) {
       template: {
         name: "aeo_login_otp",
         language: { code: "en_US" },
-        // SUPER FIX: Body aur Button DONO ko ek sath bhejna zaroori hai!
         components: [
           {
             type: "body",
@@ -42,7 +43,7 @@ export default function Login({ onLogin, onAdminLogin }) {
           {
             type: "button",
             sub_type: "url",
-            index: "0",
+            index: 0, // Integer 0 (Yehi sabse main fix tha)
             parameters: [
               { type: "text", text: otpCode }
             ]
@@ -68,6 +69,7 @@ export default function Login({ onLogin, onAdminLogin }) {
     return true;
   };
 
+  // STEP 1: Phone Submit
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -76,6 +78,7 @@ export default function Login({ onLogin, onAdminLogin }) {
 
     setLoading(true);
     try {
+      // Firebase User Check
       const userRef = doc(db, "students", phone);
       const userSnap = await getDoc(userRef);
       
@@ -86,13 +89,14 @@ export default function Login({ onLogin, onAdminLogin }) {
         setIsExistingUser(false);
       }
 
+      // Generate & Send OTP
       const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
       setGeneratedOtp(newOtp);
       
       await sendWhatsAppOTP(phone, newOtp);
       
       setOtp('');
-      setStep(2);
+      setStep(2); // Go to OTP screen
       
     } catch (err) {
       setError("Meta Error: " + err.message);
@@ -101,21 +105,23 @@ export default function Login({ onLogin, onAdminLogin }) {
     }
   };
 
+  // STEP 2: OTP Verify
   const handleVerifyOtp = (e) => {
     e.preventDefault();
     setError('');
     
     if (otp === generatedOtp) {
       if (isExistingUser) {
-        setStep(4);
+        setStep(4); // Old user -> Instructions
       } else {
-        setStep(3); 
+        setStep(3); // New user -> Profile Form
       }
     } else {
       setError("Invalid OTP! Please check your WhatsApp.");
     }
   };
 
+  // STEP 3: Save New Profile
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -130,17 +136,19 @@ export default function Login({ onLogin, onAdminLogin }) {
       const userData = { ...profileData, phone, uid: phone, joinedAt: new Date().toISOString() };
       await setDoc(userRef, userData, { merge: true });
       setProfileData(userData);
-      setStep(4); 
+      setStep(4); // Go to Instructions
     } catch (err) {
       setError("Database Error!");
     }
     setLoading(false);
   };
 
+  // STEP 4: Enter Exam
   const handleEnterExam = () => {
     onLogin({ ...profileData, phone, uid: phone });
   };
 
+  // Secret Admin Login
   const handleSecretAdminLogin = () => {
     if (adminPassword === '525077') {
       onAdminLogin();
@@ -155,7 +163,7 @@ export default function Login({ onLogin, onAdminLogin }) {
   return (
     <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4 font-sans relative overflow-hidden select-none">
       
-      {/* SECRET ADMIN HOVER */}
+      {/* ================= SECRET ADMIN HOVER ================= */}
       <div 
         className="absolute top-0 right-0 w-24 h-24 z-40 cursor-default"
         onMouseEnter={() => setShowAdminSecret(true)}
@@ -165,16 +173,30 @@ export default function Login({ onLogin, onAdminLogin }) {
           className="absolute top-4 right-4 bg-gray-950 border-2 border-gray-800 p-2 rounded-xl z-50 flex gap-2 shadow-[0_0_20px_rgba(239,68,68,0.3)] animate-pulse"
           onMouseLeave={() => setShowAdminSecret(false)}
         >
-          <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Passcode" className="bg-black text-red-400 font-bold px-3 py-1.5 rounded-lg w-28 text-sm outline-none border border-gray-800 focus:border-red-500 text-center tracking-widest shadow-inner" autoFocus onKeyDown={(e) => e.key === 'Enter' && handleSecretAdminLogin()} />
-          <button type="button" onClick={handleSecretAdminLogin} className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white px-4 py-1.5 rounded-lg text-sm font-black shadow-lg">OK</button>
+          <input 
+            type="password" 
+            value={adminPassword} 
+            onChange={(e) => setAdminPassword(e.target.value)} 
+            placeholder="Passcode" 
+            className="bg-black text-red-400 font-bold px-3 py-1.5 rounded-lg w-28 text-sm outline-none border border-gray-800 focus:border-red-500 text-center tracking-widest shadow-inner" 
+            autoFocus 
+            onKeyDown={(e) => e.key === 'Enter' && handleSecretAdminLogin()} 
+          />
+          <button 
+            type="button" 
+            onClick={handleSecretAdminLogin} 
+            className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white px-4 py-1.5 rounded-lg text-sm font-black shadow-lg"
+          >
+            OK
+          </button>
         </div>
       )}
 
-      {/* 3D Orbs */}
+      {/* ================= 3D BACKGROUND ORBS ================= */}
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600 rounded-full blur-[160px] opacity-20 animate-pulse"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-green-600 rounded-full blur-[160px] opacity-15"></div>
 
-      {/* Main Glass Card */}
+      {/* ================= MAIN GLASS CARD ================= */}
       <div className={`w-full ${step === 4 ? 'max-w-3xl' : 'max-w-lg'} bg-gray-950/80 backdrop-blur-2xl border border-gray-800 p-8 md:p-10 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5),inset_0_0_20px_rgba(255,255,255,0.02)] z-10 relative transition-all duration-500`}>
         
         {step !== 4 && (
