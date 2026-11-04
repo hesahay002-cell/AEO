@@ -12,6 +12,10 @@ export default function Login({ onLogin, onAdminLogin }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // ================= SECRET ADMIN STATES =================
+  const [showAdminSecret, setShowAdminSecret] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+
   // ================= META WHATSAPP API SETTINGS =================
   const META_TOKEN = "YAHAN_APNA_PERMANENT_ACCESS_TOKEN_DAALEIN"; 
   const PHONE_NUMBER_ID = "YAHAN_APNA_PHONE_NUMBER_ID_DAALEIN";
@@ -53,12 +57,6 @@ export default function Login({ onLogin, onAdminLogin }) {
   const handleSendOtp = async (e) => {
     e.preventDefault();
     setError('');
-    
-    // Agar admin apna number daal de galti se, toh seedha admin login ho jaye
-    if (formData.phone === 'admin' || formData.phone === '1234567890') {
-        onAdminLogin();
-        return;
-    }
 
     if (!formData.name || !formData.school || !formData.className || formData.phone.length !== 10) {
         return setError("Please fill all fields correctly! Phone must be 10 digits.");
@@ -103,15 +101,59 @@ export default function Login({ onLogin, onAdminLogin }) {
     }
   };
 
+  const handleSecretAdminLogin = () => {
+    if (adminPassword === '525077') {
+      onAdminLogin();
+      setShowAdminSecret(false);
+      setAdminPassword('');
+    } else {
+      setShowAdminSecret(false);
+      setAdminPassword('');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black flex flex-col justify-center items-center p-4 font-sans relative overflow-hidden select-none">
+      
+      {/* ================= SECRET INVISIBLE HOVER AREA ================= */}
+      <div 
+        className="absolute top-0 right-0 w-24 h-24 z-40 cursor-default"
+        onMouseEnter={() => setShowAdminSecret(true)}
+        onClick={() => setShowAdminSecret(true)}
+      ></div>
+
+      {/* ================= SECRET PASSWORD BOX ================= */}
+      {showAdminSecret && (
+        <div 
+          className="absolute top-4 right-4 bg-gray-950 border-2 border-gray-800 p-2 rounded-xl z-50 flex gap-2 shadow-[0_0_20px_rgba(239,68,68,0.3)] animate-pulse"
+          onMouseLeave={() => setShowAdminSecret(false)}
+        >
+          <input
+            type="password"
+            value={adminPassword}
+            onChange={(e) => setAdminPassword(e.target.value)}
+            placeholder="Passcode"
+            className="bg-black text-red-400 font-bold px-3 py-1.5 rounded-lg w-28 text-sm outline-none border border-gray-800 focus:border-red-500 shadow-inner tracking-widest text-center"
+            autoFocus
+            onKeyDown={(e) => e.key === 'Enter' && handleSecretAdminLogin()}
+          />
+          <button
+            type="button"
+            onClick={handleSecretAdminLogin}
+            className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white px-4 py-1.5 rounded-lg text-sm font-black shadow-lg"
+          >
+            OK
+          </button>
+        </div>
+      )}
+
       {/* 3D Glowing Background Orbs */}
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600 rounded-full blur-[160px] opacity-30 animate-pulse"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-green-600 rounded-full blur-[160px] opacity-25"></div>
       <div className="absolute top-[30%] right-[20%] w-[350px] h-[350px] bg-red-600 rounded-full blur-[150px] opacity-20"></div>
 
       {/* 3D Glassmorphism Card */}
-      <div className="w-full max-w-lg bg-gray-950/80 backdrop-blur-2xl border-2 border-gray-800 p-8 md:p-10 rounded-[2.5rem] shadow-[0_0_50px_rgba(37,99,235,0.25),inset_0_0_20px_rgba(255,255,255,0.05)] z-10 relative flex flex-col">
+      <div className="w-full max-w-lg bg-gray-950/80 backdrop-blur-2xl border-2 border-gray-800 p-8 md:p-10 rounded-[2.5rem] shadow-[0_0_50px_rgba(37,99,235,0.25),inset_0_0_20px_rgba(255,255,255,0.05)] z-10 relative">
         
         <div className="text-center mb-8">
           <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-green-400 to-red-400 mb-2 drop-shadow-[0_5px_15px_rgba(0,0,0,0.5)] tracking-wider">AEO PORTAL</h1>
@@ -125,7 +167,7 @@ export default function Login({ onLogin, onAdminLogin }) {
         )}
 
         {step === 1 ? (
-          <form onSubmit={handleSendOtp} className="flex flex-col gap-5 flex-grow">
+          <form onSubmit={handleSendOtp} className="flex flex-col gap-5">
             <div className="relative">
                 <label className="text-xs font-extrabold text-blue-400 uppercase ml-2 mb-1 block tracking-wider">Student Name</label>
                 <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Enter your full name" className="w-full bg-black/60 border-2 border-gray-800 text-white text-lg p-4 rounded-2xl outline-none focus:border-blue-500 focus:shadow-[0_0_15px_rgba(37,99,235,0.4)] shadow-inner transition-all font-medium placeholder-gray-600" />
@@ -159,7 +201,7 @@ export default function Login({ onLogin, onAdminLogin }) {
             </button>
           </form>
         ) : (
-          <form onSubmit={handleVerifyOtp} className="flex flex-col gap-6 flex-grow">
+          <form onSubmit={handleVerifyOtp} className="flex flex-col gap-6">
             <div className="text-center mb-2 bg-black/60 p-5 rounded-2xl border border-gray-800 shadow-inner">
               <p className="text-green-400 font-bold text-lg">OTP Sent to +91 {formData.phone}</p>
               <button type="button" onClick={() => setStep(1)} className="text-blue-400 text-sm font-bold underline hover:text-blue-300 mt-2">Edit Details / Number</button>
@@ -175,20 +217,6 @@ export default function Login({ onLogin, onAdminLogin }) {
             </button>
           </form>
         )}
-
-        {/* Admin Login Toggle Section */}
-        <div className="mt-8 pt-6 border-t border-gray-800/80 text-center w-full">
-          <p className="text-gray-500 text-[10px] font-bold mb-3 uppercase tracking-[0.3em]">For Authorized Personnel Only</p>
-          <button 
-            type="button" 
-            onClick={onAdminLogin}
-            className="w-full bg-black/40 hover:bg-gray-900 border border-gray-800 hover:border-gray-600 text-gray-400 hover:text-white px-6 py-3 rounded-xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 group"
-          >
-            <span className="text-gray-500 group-hover:text-blue-400 transition-colors">🔑</span> 
-            Admin Portal Login
-          </button>
-        </div>
-
       </div>
     </div>
   );
