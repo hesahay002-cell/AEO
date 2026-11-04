@@ -70,7 +70,6 @@ export default function Login({ onLogin, onAdminLogin }) {
     return true;
   };
 
-  // SMART LOGIN LOGIC: Device Verification
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -89,10 +88,11 @@ export default function Login({ onLogin, onAdminLogin }) {
         setIsExistingUser(true);
 
         if (isDeviceVerified) {
-          // CASE 1: Purana Bacha + Purana Device -> Direct Entry!
-          setStep(4);
+          // SMART FIX: Purana bacha bina OTP ke direct aayega, lekin Step 4 nahi, Step 3 (Profile) par jayega!
+          // Taaki agar ghar ka dusra bacha test de raha ho toh wo apna Naam/Class change kar sake.
+          setStep(3);
         } else {
-          // CASE 2: Purana Bacha + NAYA DEVICE -> Send OTP!
+          // Purana Bacha + NAYA DEVICE -> Send OTP
           const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
           setGeneratedOtp(newOtp);
           await sendWhatsAppOTP(phone, newOtp);
@@ -100,7 +100,7 @@ export default function Login({ onLogin, onAdminLogin }) {
           setStep(2);
         }
       } else {
-        // CASE 3: Ekdam Naya Bacha -> Send OTP!
+        // Naya Bacha -> Send OTP
         setIsExistingUser(false);
         const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
         setGeneratedOtp(newOtp);
@@ -118,20 +118,14 @@ export default function Login({ onLogin, onAdminLogin }) {
     }
   };
 
-  // OTP VERIFICATION & DEVICE SAVING
   const handleVerifyOtp = (e) => {
     e.preventDefault();
     setError('');
     
     if (otp === generatedOtp) {
-      // Success! Is device ko is number ke liye hamesha ke liye verify kar do
       localStorage.setItem(`aeo_device_${phone}`, 'verified');
-
-      if (isExistingUser) {
-        setStep(4); // Purana bacha OTP verify karke Instructions par jayega
-      } else {
-        setStep(3); // Naya bacha Profile form par jayega
-      }
+      // Ab OTP verify hone ke baad HAMESHA Step 3 (Profile form) hi khulega
+      setStep(3); 
     } else {
       setError("Invalid OTP! Please check your WhatsApp.");
     }
@@ -149,6 +143,7 @@ export default function Login({ onLogin, onAdminLogin }) {
     try {
       const userRef = doc(db, "students", phone);
       const userData = { ...profileData, phone, uid: phone, joinedAt: new Date().toISOString() };
+      // Ye naye bachhe ka data overwrite kar dega, taaki uski class ke test dikhein
       await setDoc(userRef, userData, { merge: true });
       setProfileData(userData);
       setStep(4); 
@@ -259,12 +254,12 @@ export default function Login({ onLogin, onAdminLogin }) {
           </form>
         )}
 
-        {/* STEP 3: NEW STUDENT PROFILE */}
+        {/* STEP 3: NEW STUDENT PROFILE (Ab Purane Bachhe ko bhi yahi dikhega) */}
         {step === 3 && (
           <form onSubmit={handleProfileSubmit} className="flex flex-col gap-5">
             <div className="text-center mb-4">
-              <h2 className="text-2xl font-bold text-white">Welcome! Complete Profile</h2>
-              <p className="text-gray-400 text-sm mt-1">First-time registration for +91 {phone}</p>
+              <h2 className="text-2xl font-bold text-white">Student Details</h2>
+              <p className="text-gray-400 text-sm mt-1">Make changes below if a different student is testing.</p>
             </div>
             <div className="relative">
                 <label className="text-xs font-extrabold text-blue-400 uppercase ml-2 mb-1 block">Full Name</label>
