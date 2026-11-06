@@ -237,7 +237,55 @@ export default function Dashboard({ user, onLogout }) {
       if (!firstAttemptData) {
         await addDoc(collection(db, "results"), finalResult);
         setFirstAttemptData(finalResult); 
+
+        // --- NEW: WHATSAPP RESULT CODE START ---
+        // Sirf pehle attempt par hi WhatsApp par result jayega
+        const META_TOKEN = "EAAUzbFPL5GIBSb8M09o9XYfhoCDcroxJaZCTGl985d2OqgAaZBFiZA3k1ZAWoDhfMzQe2mN8O2tTzLtpAHyxlpaCc9ybSGu1SkAl4f24tjnSfpIyu6gct8CmPVpYijcq8KOAi8TQvQ780W7oDG8PtzkaDqZBS2pLGvgMY3lTUOFkoqGUf8DxvbhXiRGHt3v5sLAZDZD"; 
+        const PHONE_NUMBER_ID = "1258484434020011";
+        
+        // Student ka naam (Variable 1), Obtained Marks (Variable 2), Total Marks (Variable 3)
+        const studentNameStr = String(finalResult.studentName);
+        const marksObtainedStr = String(finalResult.obtainedMarks);
+        const totalMarksStr = String(finalResult.totalMarks);
+        // Phone number (10 digit confirm karein)
+        const targetPhone = String(user?.phone || user?.uid).replace(/[^0-9]/g, '').slice(0, 10);
+
+        if (targetPhone.length === 10) {
+            const url = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
+            const payload = {
+              messaging_product: "whatsapp",
+              to: `91${targetPhone}`,
+              type: "template",
+              template: {
+                name: "aeo_test_result", // Aapka naya approve hua template name
+                language: { code: "en" }, // English ke liye. Agar English (US) tha to "en_US"
+                components: [
+                  {
+                    type: "body",
+                    parameters: [
+                      { type: "text", text: studentNameStr },
+                      { type: "text", text: marksObtainedStr },
+                      { type: "text", text: totalMarksStr }
+                    ]
+                  }
+                ]
+              }
+            };
+            
+            // Meta API ko call karein (background me)
+            fetch(url, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${META_TOKEN}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(payload)
+            }).catch(e => console.error("WhatsApp Result Error:", e));
+        }
+        // --- WHATSAPP RESULT CODE END ---
+
       }
+      
       // UI me marks dikhane ke liye local state update karo (bhale hi 100th baar submit ho)
       setResult(finalResult);
       setTestStatus('submitted');
